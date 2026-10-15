@@ -1,132 +1,141 @@
-# VS Code extension: design (v1, read-only)
+# VS Code extension: design (v1, pull only)
 
-Status: decided (option B on desktop) · 2026-10-15
+Status: agreed · 2026-10-16
 
 ## Goal
 
-Browse Ballistica cloud workspaces in VS Code, read-only. Sign in, see
-your workspaces, open one as a folder, read files, refresh to pick up
-cloud changes. Editing comes later through an explicit **Push** command,
-which this design leaves room for but doesn't build.
+Use Ballistica cloud workspaces from VS Code the way git checkouts are
+used: any folder with a `.bacloudstate.json` is a cloud workspace. v1
+can **sign in**, **clone** a cloud workspace into a folder, and **pull**
+cloud changes into it safely, showing incoming changes and conflicts
+before anything is overwritten.
 
-Out of scope for v1: editing or push, vscode.dev / browser VS Code,
-asset-package commands.
+Out of scope for v1: push (and "initialize this folder as a workspace",
+which is a push), vscode.dev / browser VS Code, asset-package commands.
+The design leaves room for push.
 
 ## Constraints that shape the design
 
-| Fact                                                                                                                                                                          | Source                        | Consequence                                                                                                                                                                                                             |
-| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| bacloud only syncs **whole folders** (manifest → server diff → deletes and downloads). There is no per-file read.                                                             | `@bacloud/sdk`, verified live | We can't fetch a file on demand. Keep a **local mirror** per workspace and serve from it.                                                                                                                               |
-| `registerFileSystemProvider(scheme, p, { isReadonly: boolean \| MarkdownString })`; read-only stats are forced `FilePermission.Readonly`.                                     | `vscode.d.ts` 1.140           | Read-only is enforced by VS Code, and the MarkdownString is the reason shown to users.                                                                                                                                  |
-| `FileSearchProvider` / `TextSearchProvider` are **proposed** API, not stable.                                                                                                 | `vscode.d.ts` 1.140           | Quick Open and Find in Files may not work in a custom-scheme workspace. **Must test early (spike).**                                                                                                                    |
-| GitHub Repositories (RemoteHub 0.64) gets search only through `enabledApiProposals: fileSearchProvider, textSearchProvider` (plus `extensionRuntime`, `scmSelectedProvider`). | RemoteHub `package.json`      | Even Microsoft's virtual-FS extension needs proposed APIs for search, which Marketplace extensions from other publishers can't use. Option A probably has **no search**; the spike confirms whether there's a fallback. |
-| Language servers generally need `file:` paths.                                                                                                                                | Virtual-workspaces guide      | Python IntelliSense etc. will be limited in a custom-scheme workspace.                                                                                                                                                  |
-| CodeSandbox has **no** FileSystemProvider; it opens sandboxes through Remote-SSH, where the files are real.                                                                   | Decompiled extension survey   | No prior art to copy for the file system part. Copy its UI patterns instead (below).                                                                                                                                    |
-| bacloud sign-in is server-driven: `openUrl`, then the server polls until the browser completes.                                                                               | Live `signin`                 | No `vscode://` URI callback needed. Map `host.openUrl` → `env.openExternal`.                                                                                                                                            |
-| `workspace list` returns only a formatted, coloured table (no JSON, extra args ignored).                                                                                      | Live test                     | The tree view must parse text. Isolate this in one tested function.                                                                                                                                                     |
+| Fact                                                                                                                                                                   | Source                        | Consequence                                                                                                                                                |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| bacloud only syncs **whole folders**. `get` makes the target match the cloud, **silently overwriting local edits** and deleting local-only files.                      | `@bacloud/sdk`, verified live | Never run `get` against the user's folder. Pull into a staging copy and apply changes ourselves.                                                           |
+| A read-only custom-scheme `FileSystemProvider` gets no Quick Open, no Find in Files and no Python language features (`findFiles` waits forever for a search provider). | Spike, VS Code 1.138          | Work on real `file://` folders. No virtual file system on desktop.                                                                                         |
+| `.bacloudstate.json` holds `snapshotid`, plus `name` only when `--workspace` was passed. The Python client rewrites it with just those keys.                           | `bacommontools/bacloud.py`    | Workspace name = `name ?? basename(folder)`. Extra data (fleet, base) can't go in this file yet; see [bacloudstate-proposal.md](bacloudstate-proposal.md). |
+| Same workspace names can exist on several fleets. A `get` against the wrong fleet succeeds if the name exists there.                                                   | Analysis                      | Record each folder's fleet in extension storage and refuse mismatches.                                                                                     |
+| The cloud snapshot id is queryable (`GET /api/v1/admin/workspace-size/<name>`) **only with an API key**; login tokens get `401 Invalid API key`.                       | pcommand source, live test    | Don't depend on it. Staleness is detected by the staging pull itself.                                                                                      |
+| bacloud sign-in is server-driven: `openUrl`, then the server polls until the browser finishes.                                                                         | Live `signin`                 | No `vscode://` callback. Map `host.openUrl` → `env.openExternal`.                                                                                          |
+| `workspace list` returns only a formatted, coloured table (no JSON).                                                                                                   | Live test                     | Parse text in one tested function.                                                                                                                         |
+| VS Code's "file modified on disk" prompt (Overwrite / Compare) fires automatically when a file with unsaved edits changes on disk.                                     | VS Code behaviour             | Applying a pull gets that safety for dirty editors for free. Saved local edits are protected by the 3-way classification below.                            |
+| GitHub Repositories (RemoteHub) gets search only through proposed APIs; CodeSandbox uses Remote-SSH.                                                                   | Package / source surveys      | No prior art for our case. Borrow UI patterns only.                                                                                                        |
 
-## Architecture
+## Detection
+
+- On activation and on `onDidChangeWorkspaceFolders`, check each workspace folder root for `.bacloudstate.json`. Watch it with a `FileSystemWatcher` so clone or delete outside VS Code is picked up.
+- A folder is a **bacloud workspace** when the file exists and parses. A file that exists but doesn't parse is shown as broken (error in the status bar), never treated as absent.
+- Identity: `name ?? basename(folder)`, plus the fleet from the folder record (below), falling back to the `bacloud.fleet` setting.
+- Multi-root windows: each folder is tracked separately. The status bar shows the one containing the active editor.
+- Context key `bacloud.inWorkspace` gates commands.
+
+## Per-folder record (extension storage)
+
+`.bacloudstate.json` can't hold our data (the Python client drops unknown keys), so the extension keeps a record per folder in `globalStorageUri/folders/<hash of absolute path>/`:
 
 ```
-extension (Node, desktop only)
-├─ auth        BacloudAuthProvider: token in SecretStorage, sign in/out commands
-├─ cloud       one BacloudClient per operation (connect → run → close)
-├─ mirror      MirrorStore: globalStorageUri/mirrors/<fleet>/<workspace>/
-│                runs `workspace get <dir> --workspace <name>` into it
-├─ readonly    writes the mirror's .vscode/settings.json (files.readonlyInclude)
-└─ ui          Workspaces tree, status bar item, commands
+record.json   { path, fleet, workspace, snapshotId, syncedAt }
+staging/      cloud content at the last pull (= base for the next pull)
+base/         transient hard-link snapshot during a pull
 ```
 
-### Local mirror (the core)
+- **Fleet guard:** if `record.fleet` differs from the current fleet, pull refuses: "This folder was cloned from _prod_; you are signed in to _test_." A folder seen for the first time adopts the current fleet on its first pull and says so.
+- If the folder is moved, the record is orphaned; the next pull rebuilds staging (one full download) and re-adopts the fleet with a notice.
+- `snapshotId` mismatch between the record and `.bacloudstate.json` means another tool (Python CLI, our CLI) synced the folder. The extension then treats staging as unknown and rebuilds it.
 
-- Location: `context.globalStorageUri/mirrors/<fleet>/<workspace>/`. Per-user, outside any project, cleaned up when the extension is uninstalled.
-- Sync = `client.run(["workspace", "get", dir, "--workspace", name])` with the stock `nodeFileHost`. The server addresses real paths, so no path translation is needed, and `.bacloudstate.json` lands in the mirror, ready for a later Push.
-- After a sync, diff the mirror's manifest before and after, and fire `onDidChangeFile` for changed, created and deleted paths. Open editors then refresh.
-- Read-only means the mirror never has local edits, so a re-sync is always safe.
-- Sync triggers: on open, on the **Refresh** command, and optionally on window focus with a cooldown (setting, default off).
+## Pull: staging copy and 3-way classification
 
-### File system provider (option A, not used on desktop)
+```
+  C     // local edits      (user's folder)
+  |
+B |     // cloud changed    (staging after this pull's get)
+| /
+A       // last sync        (staging before the pull → hard-linked to base/)
+```
 
-The spike below ruled this out for desktop: no search and no language features in a custom scheme. It is kept here as the starting point for a possible browser build.
+1. **Snapshot base:** hard-link `staging/` → `base/`. No file data is copied.
+2. **Fetch:** `workspace get staging/ --workspace <name>`. This is safe for `base/` because `nodeFileHost` replaces files by write-to-temp + rename and deletes by unlink, so linked inodes keep A's bytes. A unit test pins this behaviour; `FileHost` documents it as a requirement.
+   - If nothing was downloaded or deleted, the folder is up to date (this is the staleness check). Done.
+3. **Classify** every path by sha256 of base (A), staging (B) and local (C):
 
-- URI: `bacloud://<fleet>/<workspace>/<path>`. The authority carries the fleet (CodeSandbox does the same, parsing identity back from the URI on activation).
-- `stat` / `readDirectory` / `readFile` read straight from the mirror, mapping ENOENT to `FileSystemError.FileNotFound`.
-- If no mirror exists yet, the first `stat` of the root triggers a sync with a progress notification.
-- Hide `.bacloudstate.json` from listings.
-- Registered with `isReadonly: new MarkdownString("Ballistica cloud workspaces are read-only in this version.")`.
-- The write methods throw `FileSystemError.NoPermissions`. VS Code shouldn't call them anyway.
+   | Local vs A                | Cloud vs A                | Result                                                |
+   | ------------------------- | ------------------------- | ----------------------------------------------------- |
+   | same                      | changed / added / deleted | **incoming**: apply cloud                             |
+   | changed / added / deleted | same                      | **local only**: keep, listed for info                 |
+   | changed                   | changed, local = cloud    | same on both sides: nothing to do                     |
+   | changed                   | changed, differ           | **conflict**                                          |
+   | deleted                   | changed                   | **conflict** (deleted locally, modified in the cloud) |
+   | changed                   | deleted                   | **conflict** (modified locally, deleted in the cloud) |
+   | added                     | added, differ             | **conflict** (added on both sides)                    |
 
-### Opening a workspace
+   Local-only files (`.bacloudstate.json`, and dotfiles in general if the server's dotfile rule is confirmed) are never touched.
 
-The `bacloud.openWorkspace` command (from the tree or the palette) syncs the mirror if needed, then does `vscode.openFolder(Uri.file(<mirror dir>))`, with a choice of current or new window.
+4. **Review** in the **Incoming Changes** view. Each incoming or conflicted file opens a diff (`vscode.diff`, staging vs local). For conflicts, try VS Code's 3-way merge editor (base/A, cloud/B, local/C); it is only reachable through an internal command (`_open.mergeEditor`), so fall back to the two-way diff with **Take cloud** / **Keep mine** if it's unavailable.
+5. **Apply:** **Apply all incoming** (one click, no conflicts touched) or per file. Copy chosen files from staging into the folder via `workspace.fs` (so open, unmodified editors refresh, and dirty ones get VS Code's own conflict prompt). Once nothing remains unresolved, write B's snapshot id into `.bacloudstate.json` (preserving its existing keys), update `record.json`, and delete `base/`.
+   - If the user stops with unresolved conflicts, the folder keeps the old snapshot id, so a future push is still refused by the server's collision guard.
 
-## Decision: what the opened folder _is_ → B on desktop
+Clone is a pull into an empty folder: `get` into staging, copy everything, write `.bacloudstate.json` (with `name`, so renaming the folder doesn't change the workspace), create the record, then offer to open the folder.
 
-|                                 | A. `bacloud://` virtual folder (above)        | B. Open the mirror as a normal `file://` folder                                       |
-| ------------------------------- | --------------------------------------------- | ------------------------------------------------------------------------------------- |
-| Read-only                       | Enforced by the provider, with a reason shown | Workspace setting `files.readonlyInclude: {"**": true}` (users can override per file) |
-| Search / Quick Open             | **None** (spike, below)                       | Works                                                                                 |
-| Language features (Python etc.) | **None** (spike: no hover / Go to Definition) | Full                                                                                  |
-| Feels like a cloud workspace    | Yes (remote indicator, scheme)                | No: it's a folder in app storage                                                      |
-| Future Push                     | Same mirror; add a command                    | Same mirror; add a command                                                            |
+Disk cost: one extra copy of each workspace (staging), plus only the files that changed between A and B during a pull.
 
-**Spike result (2026-10-15, VS Code 1.138, Pylance installed).** A throwaway read-only provider serving a local folder:
+## UI
 
-| Check                                                | A (`bacloud-spike:/`)                                                                 |
-| ---------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| Open folder, Explorer, open files, language detected | ✅                                                                                    |
-| Edits refused with the read-only reason              | ✅                                                                                    |
-| `workspace.findFiles` / Quick Open (Cmd+P)           | ❌ hangs: log says "No search provider registered for scheme: bacloud-spike, waiting" |
-| Find in Files (Cmd+Shift+F)                          | ❌ nothing found                                                                      |
-| Python hover / Go to Definition                      | ❌                                                                                    |
+No activity-bar icon. One **Ballistica** view container in the **bottom panel** (next to Terminal and Output) with two views:
 
-VS Code has no fallback search for custom schemes, and language servers ignore them. A read-only folder you can't search or navigate defeats the purpose.
+- **Cloud Workspaces**
+  - Signed out: `viewsWelcome` with a **Sign in** link.
+  - Signed in: one item per cloud workspace (name; type and size as description). Inline **Clone…** (pick a parent folder; the workspace name is the folder name), and **Open** when a known local clone exists. Title actions: **Refresh**, **Sign out**, fleet indicator.
+- **Incoming Changes** (visible when a pull is staged): groups _Conflicts_, _Incoming_, _Local only_. Click to diff. Inline **Apply** / **Take cloud** / **Keep mine**. Title action **Apply all incoming**, **Discard pull**.
 
-**Decision: B on desktop.** Open the mirror as a `file://` folder with read-only workspace settings. Keep the mirror and sync engine independent of presentation so a browser build could later add an A-style provider over browser storage (blocked anyway on WebSocket auth headers and CORS; see "Browser support" below).
+Status bar (only in a bacloud workspace): `☁ Workspace1 · synced 5m ago`. States: syncing (spinner), _n_ incoming, conflicts, fleet mismatch, broken state file. Click → **Pull** if nothing is staged, otherwise reveal Incoming Changes.
 
-Consequences of B:
+Commands: `signIn`, `signOut`, `refreshWorkspaces`, `clone`, `pull`, `applyAllIncoming`, `discardPull`, `showLog`. Output goes to a **Ballistica** output channel; session diagnostics only with `bacloud.trace`.
 
-- The opened folder is the mirror dir. Write a `.vscode/settings.json` there with `files.readonlyInclude: {"**": true}` and `files.readonlyExclude` empty, plus `files.exclude` for `.bacloudstate.json` and `.vscode`. Sync must not upload or delete these local-only files.
-- Recognise "this window is a bacloud mirror" by the folder living under `globalStorageUri/mirrors/<fleet>/<name>/` (gives the fleet and workspace name back). That drives the status bar and the Refresh/Push commands.
-- No `resourceLabelFormatters` (only for custom schemes). The window title can use the workspace name via the `window.title` setting in the mirror's settings.
-
-### Browser support (not planned)
-
-Option B needs a real disk, so a browser build would need an A-style provider over in-memory or IndexedDB storage (the SDK's `FileHost` allows it). It is also blocked by things outside this extension: browsers can't set `Authorization`/`X-WS-Token` on WebSockets, and signed GCS / one-shot-upload requests need CORS.
-
-## UI (patterns borrowed from CodeSandbox)
-
-- Activity-bar container **Ballistica Cloud** with:
-  - a **Sign In** view (`when: !bacloud.signedIn`) using `viewsWelcome` and a `command:bacloud.signIn` link;
-  - a **Workspaces** tree (`when: bacloud.signedIn`) with one item per workspace (name; type and size as description), `contextValue = workspace`, inline actions **Open** and **Open in New Window** filtered by `viewItem == workspace`, and a title-bar **Refresh**.
-- Status bar item, only in a mirror window: `☁ <workspace>` with last-sync time; click to Refresh, spinner while syncing.
-- Commands: `signIn`, `signOut`, `refreshWorkspaces`, `openWorkspace`, `syncWorkspace`, `showLog`.
-- Server output (messages, progress) goes to a **Ballistica Cloud** output channel. `BACLOUD_VERBOSE`-style session logs only when the `bacloud.trace` setting is on.
+Settings: `bacloud.fleet` (default `prod`), `bacloud.pullOnOpen` (default off; when on, runs steps 1–3 only and shows the count, never applies).
 
 ## Auth
 
-- Store the token in `context.secrets`, keyed by fleet. This avoids a plaintext file, unlike CodeSandbox and our CLI.
-- Sign-in: `BacloudClient.run(["signin"])` with a host where `openUrl` → `env.openExternal`, `prompt` → `showInputBox` (`password` → `password: true`), and `onLoginChange` → secrets. Show a cancellable progress notification while the server polls.
-- Optional later: also register an `AuthenticationProvider` so the account shows in VS Code's Accounts menu.
+- Token in `context.secrets`, keyed by fleet. No plaintext file (unlike CodeSandbox and our CLI).
+- Sign-in runs `BacloudClient.run(["signin"])` with a host where `openUrl` → `env.openExternal`, `prompt` → `showInputBox` (`password: true` where asked), `onLoginChange` → secrets. A cancellable progress notification covers the server's polling.
+- Later: an `AuthenticationProvider` so the account shows in VS Code's Accounts menu.
 
 ## SDK and CLI changes this needs
 
-1. Expose a cancellation `AbortSignal` on `run()` so sign-in and long syncs can be cancelled.
-2. A `parseWorkspaceList(text)` helper (strip ANSI, parse columns), in the SDK, with fixture tests from live output.
-3. A manifest diff helper for change events (`nodeFileHost.manifest` already provides hashes).
-4. Settings: `bacloud.fleet` (default `prod`) and `bacloud.syncOnFocus`.
-5. Fix: the CLI crashes with EPIPE when stdout closes early (seen with `| head`).
+1. `run()` takes an `AbortSignal` (cancel sign-in and long pulls).
+2. `parseWorkspaceList(text)` (strip ANSI, parse columns), with fixtures from live output.
+3. A three-way classifier over manifests (pure, well tested), and a manifest helper that hashes a folder while skipping local-only files.
+4. `FileHost` contract: writes replace by rename, deletes unlink (hard-linked base depends on it). Add a test.
+5. `.bacloudstate.json` writes must preserve unknown keys and be atomic. The SDK currently writes only `{snapshotid, name}`; fix it.
+6. Fix the CLI's EPIPE crash when stdout closes early.
+
+## Open questions to verify
+
+- Does the server skip dotfiles/dot-dirs (e.g. `.vscode/`, `.git/`) on get and put? The Python source implies so for `.bacloudstate.json`.
+- Is `_open.mergeEditor` usable from an extension in current VS Code?
+- Hard links need `base/` and `staging/` on one volume. They are siblings, so they always are; if `link()` still fails (e.g. a filesystem without hard links), fall back to a full copy.
 
 ## Package layout
 
-`apps/vscode` (`@bacloud/vscode`), bundled with `vp pack` into a single CJS `dist/extension.js` with `vscode` as an external. `engines.vscode` will be set to a recent stable version. `extensionKind: ["ui", "workspace"]`, `capabilities.virtualWorkspaces: true`. Packaging uses `@vscode/vsce`.
+`apps/vscode` (`@bacloud/vscode`), bundled with `vp pack` into one CJS `dist/extension.js` with `vscode` external. `extensionKind: ["workspace"]` (it must run where the folders are). `capabilities.virtualWorkspaces: false` (nothing to do without real folders), `untrustedWorkspaces: { supported: "limited" }` (pull writes files; only allowed in trusted folders). Packaged with `@vscode/vsce`.
 
 ## Plan
 
-1. ~~Spike~~ done: B chosen.
-2. Scaffold `apps/vscode`, plus the build and launch config (Extension Development Host).
-3. Auth: SecretStorage sign-in and sign-out.
-4. Workspaces tree with the list parser.
-5. Mirror and sync, read-only settings, and Open.
-6. Status bar, Refresh, output channel.
-7. Later: the Push command, which is `workspace put` on the mirror with the existing collision guard and a diff view of local and cloud changes.
+1. Scaffold `apps/vscode`, build, and an Extension Development Host launch config.
+2. Auth (SecretStorage sign-in/out) and the Cloud Workspaces view.
+3. SDK: classifier, manifest helper, `.bacloudstate.json` fixes, `AbortSignal`.
+4. Detection, folder records, status bar.
+5. Clone.
+6. Pull: staging, base snapshot, Incoming Changes view, diffs, apply.
+7. Later: Push (`workspace put` of the folder, previewing local changes against the same base), and "initialize this folder".
+
+## Appendix: rejected presentation options
+
+- **A. `bacloud://` read-only virtual folder.** Spike (VS Code 1.138, Pylance installed): browsing and read-only enforcement work; Quick Open hangs ("No search provider registered for scheme"), Find in Files finds nothing, no Python hover or Go to Definition. Kept as the starting point for a browser build, which is also blocked by WebSocket auth headers and CORS on storage hosts.
+- **B. Hidden mirror opened as a read-only `file://` folder.** Search works, but it hides files in app storage and fights the user's own folders. Superseded by `.bacloudstate.json` detection.
