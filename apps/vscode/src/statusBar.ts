@@ -62,11 +62,7 @@ export class CheckoutStatusBar implements vscode.Disposable {
     const { name, error, record, stateModified } = checkout;
     const tooltip = new vscode.MarkdownString(`**${name}** · Ballistica cloud workspace\n\n`);
     this.item.backgroundColor = undefined;
-    this.item.command = {
-      command: "bacloud.pull",
-      title: "Pull",
-      arguments: [checkout.folder.uri],
-    };
+    this.item.command = "bacloud.showPanel";
 
     const staged = this.pulls.staged;
     if (staged && staged.checkout.folder === checkout.folder) {
@@ -108,7 +104,7 @@ export class CheckoutStatusBar implements vscode.Disposable {
           `Snapshot: \`${checkout.state?.snapshotid ?? "unknown"}\``,
           synced ? `Last sync: ${synced.toLocaleString()}` : undefined,
           record ? undefined : "_Synced by another tool; the next pull rebuilds its base copy._",
-          "Click to pull.",
+          "Click to open the Ballistica panel.",
         ]
           .filter(Boolean)
           .join("\n\n"),
