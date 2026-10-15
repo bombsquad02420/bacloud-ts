@@ -1,29 +1,13 @@
-# Vite+ Monorepo Starter
+# bacloud-ts
 
-A starter for creating a Vite+ monorepo.
+TypeScript implementation of the Ballistica cloud (`bacloud`) client.
 
-## Development
-
-- Check everything is ready:
-
-```bash
-vp run ready
-```
-
-- Run the tests:
+| Package                        | Description                                          |
+| ------------------------------ | ---------------------------------------------------- |
+| [`@bacloud/sdk`](packages/sdk) | Wire protocol, session transport and command runner. |
 
 ```bash
+vp install
 vp run -r test
-```
-
-- Build the monorepo:
-
-```bash
 vp run -r build
-```
-
-- Run the development server:
-
-```bash
-vp run dev
 ```
