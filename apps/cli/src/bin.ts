@@ -7,6 +7,16 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.on(signal, () => process.exit(2));
 }
 
+// Output piped to a reader that stopped early (`| head`): there is no
+// one left to tell anything, so stop quietly instead of crashing on the
+// unhandled EPIPE, as standard Unix tools do.
+for (const stream of [process.stdout, process.stderr]) {
+  stream.on("error", (err: NodeJS.ErrnoException) => {
+    if (err.code === "EPIPE") process.exit(process.exitCode ?? 0);
+    throw err;
+  });
+}
+
 main({
   argv: process.argv.slice(2),
   env: process.env,

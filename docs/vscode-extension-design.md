@@ -112,7 +112,7 @@ Settings: `bacloud.fleet` (default `prod`), `bacloud.pullOnOpen` (default off; w
 3. A three-way classifier over manifests (pure, well tested), and a manifest helper that hashes a folder while skipping local-only files.
 4. `FileHost` contract: writes replace by rename, deletes unlink (hard-linked base depends on it). Add a test.
 5. `.bacloudstate.json` writes must preserve unknown keys and be atomic. The SDK currently writes only `{snapshotid, name}`; fix it.
-6. Fix the CLI's EPIPE crash when stdout closes early.
+6. ~~Fix the CLI's EPIPE crash when stdout closes early.~~ Done.
 
 ## Server sync rules (verified 2026-10-16)
 
