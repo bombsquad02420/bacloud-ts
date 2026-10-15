@@ -38,6 +38,11 @@
         {
           "id": "bacloud.workspaces",
           "name": "Cloud Workspaces"
+        },
+        {
+          "id": "bacloud.changes",
+          "name": "Incoming Changes",
+          "when": "bacloud.pullStaged"
         }
       ]
     },
@@ -81,6 +86,42 @@
         "command": "bacloud.showPanel",
         "title": "Show Ballistica Panel",
         "category": "Ballistica"
+      },
+      {
+        "command": "bacloud.pull",
+        "title": "Pull",
+        "category": "Ballistica",
+        "icon": "$(cloud-download)",
+        "enablement": "isWorkspaceTrusted"
+      },
+      {
+        "command": "bacloud.openChange",
+        "title": "Compare with Cloud",
+        "category": "Ballistica"
+      },
+      {
+        "command": "bacloud.takeCloud",
+        "title": "Take Cloud Version",
+        "category": "Ballistica",
+        "icon": "$(cloud-download)"
+      },
+      {
+        "command": "bacloud.keepLocal",
+        "title": "Keep Local Version",
+        "category": "Ballistica",
+        "icon": "$(check)"
+      },
+      {
+        "command": "bacloud.applyAllIncoming",
+        "title": "Apply All Incoming",
+        "category": "Ballistica",
+        "icon": "$(check-all)"
+      },
+      {
+        "command": "bacloud.discardPull",
+        "title": "Discard Pull",
+        "category": "Ballistica",
+        "icon": "$(discard)"
       }
     ],
     "menus": {
@@ -94,6 +135,16 @@
           "command": "bacloud.signOut",
           "when": "view == bacloud.workspaces && bacloud.signedIn",
           "group": "navigation@9"
+        },
+        {
+          "command": "bacloud.applyAllIncoming",
+          "when": "view == bacloud.changes",
+          "group": "navigation@1"
+        },
+        {
+          "command": "bacloud.discardPull",
+          "when": "view == bacloud.changes",
+          "group": "navigation@2"
         }
       ],
       "commandPalette": [
@@ -108,6 +159,30 @@
         {
           "command": "bacloud.clone",
           "when": "bacloud.signedIn"
+        },
+        {
+          "command": "bacloud.pull",
+          "when": "bacloud.inCheckout && bacloud.signedIn"
+        },
+        {
+          "command": "bacloud.applyAllIncoming",
+          "when": "bacloud.pullStaged"
+        },
+        {
+          "command": "bacloud.discardPull",
+          "when": "bacloud.pullStaged"
+        },
+        {
+          "command": "bacloud.openChange",
+          "when": "false"
+        },
+        {
+          "command": "bacloud.takeCloud",
+          "when": "false"
+        },
+        {
+          "command": "bacloud.keepLocal",
+          "when": "false"
         }
       ],
       "view/item/context": [
@@ -120,6 +195,16 @@
           "command": "bacloud.clone",
           "when": "view == bacloud.workspaces && viewItem == workspace",
           "group": "1_clone"
+        },
+        {
+          "command": "bacloud.takeCloud",
+          "when": "view == bacloud.changes && viewItem =~ /^(incoming|conflict)$/",
+          "group": "inline@1"
+        },
+        {
+          "command": "bacloud.keepLocal",
+          "when": "view == bacloud.changes && viewItem == conflict",
+          "group": "inline@2"
         }
       ]
     },

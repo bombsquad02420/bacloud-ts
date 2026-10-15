@@ -47,6 +47,11 @@ export class FolderStore {
     return join(this.dirFor(folder), "staging");
   }
 
+  /** The previous sync, hard-linked from staging while a pull is open. */
+  baseDir(folder: string): string {
+    return join(this.dirFor(folder), "base");
+  }
+
   async read(folder: string): Promise<FolderRecord | undefined> {
     try {
       const record = JSON.parse(

@@ -1,9 +1,11 @@
 import * as vscode from "vscode";
 import { BacloudError, BacloudSessionError } from "@bacloud/sdk";
 import { Auth } from "./auth.ts";
+import { ChangesView, CLOUD_SCHEME, CloudContentProvider, type ChangeNode } from "./changesView.ts";
 import { cloneWorkspace } from "./clone.ts";
 import { Cloud } from "./cloud.ts";
 import { CheckoutTracker, FolderStore } from "./folders.ts";
+import { PullManager } from "./pull.ts";
 import { CheckoutStatusBar } from "./statusBar.ts";
 import { WorkspacesView, type WorkspaceNode } from "./workspacesView.ts";
 
@@ -14,6 +16,9 @@ export function activate(context: vscode.ExtensionContext): void {
   const workspaces = new WorkspacesView(cloud, auth);
   const store = new FolderStore(context.globalStorageUri);
   const tracker = new CheckoutTracker(store);
+  const pulls = new PullManager({ cloud, auth, store, log });
+  const changes = new ChangesView(pulls);
+  const statusBar = new CheckoutStatusBar(tracker, pulls);
 
   /** Report command failures without dumping stack traces on users. */
   const command = <A extends unknown[]>(id: string, fn: (...args: A) => Promise<void> | void) =>
@@ -43,17 +48,54 @@ export function activate(context: vscode.ExtensionContext): void {
     if (name) await cloneWorkspace(name, { cloud, auth, store });
   };
 
+  const pull = async (folder?: vscode.Uri) => {
+    let checkout = folder ? tracker.find(folder) : statusBar.current();
+    if (!checkout && tracker.all.length > 1) {
+      const picked = await vscode.window.showQuickPick(
+        tracker.all.map((c) => ({ label: c.name, description: c.folder.uri.fsPath, checkout: c })),
+        { title: "Pull which workspace?" },
+      );
+      checkout = picked?.checkout;
+    }
+    if (!checkout) {
+      if (tracker.all.length === 0)
+        throw new Error("No open folder is a Ballistica cloud workspace.");
+      return;
+    }
+    await pulls.pull(checkout);
+  };
+  /** Tree inline actions pass a node; the palette passes nothing. */
+  const changePath = (node?: ChangeNode) => {
+    if (node?.type !== "change") throw new Error("Pick a file in Incoming Changes.");
+    return node.change.path;
+  };
+
   context.subscriptions.push(
     log,
     auth,
     workspaces,
     tracker,
-    new CheckoutStatusBar(tracker),
+    pulls,
+    changes,
+    statusBar,
     vscode.window.registerTreeDataProvider("bacloud.workspaces", workspaces),
+    vscode.window.registerTreeDataProvider("bacloud.changes", changes),
+    vscode.workspace.registerTextDocumentContentProvider(
+      CLOUD_SCHEME,
+      new CloudContentProvider(pulls),
+    ),
     command("bacloud.signIn", () => auth.signIn()),
     command("bacloud.signOut", () => auth.signOut()),
     command("bacloud.refreshWorkspaces", () => workspaces.refresh()),
     command("bacloud.clone", clone),
+    command("bacloud.pull", pull),
+    command("bacloud.openChange", (node?: ChangeNode) =>
+      node?.type === "change" ? changes.open(node.change) : undefined,
+    ),
+    command("bacloud.takeCloud", (node?: ChangeNode) => pulls.takeCloud(changePath(node))),
+    command("bacloud.keepLocal", (node?: ChangeNode) => pulls.keepLocal(changePath(node))),
+    command("bacloud.applyAllIncoming", () => pulls.applyAllIncoming()),
+    command("bacloud.discardPull", () => pulls.discard()),
     command("bacloud.showPanel", async () => {
       await vscode.commands.executeCommand("workbench.view.extension.ballistica");
     }),
