@@ -3,7 +3,7 @@ import { BacloudError, BacloudSessionError } from "@bacloud/sdk";
 import { Auth } from "./auth.ts";
 import { ChangesView, CLOUD_SCHEME, CloudContentProvider, type ChangeNode } from "./changesView.ts";
 import { cloneWorkspace } from "./clone.ts";
-import { CurrentWorkspaceView } from "./currentView.ts";
+import { CurrentWorkspaceView, type CurrentNode } from "./currentView.ts";
 import { Cloud } from "./cloud.ts";
 import { CheckoutTracker, FolderStore } from "./folders.ts";
 import { PullManager } from "./pull.ts";
@@ -52,8 +52,14 @@ export function activate(context: vscode.ExtensionContext): void {
     if (name) await cloneWorkspace(name, { cloud, auth, store });
   };
 
-  const pickCheckout = async (folder: vscode.Uri | undefined, title: string) => {
-    let checkout = folder ? tracker.find(folder) : statusBar.current();
+  /** Commands get a folder Uri (status bar), a view node (inline icons) or nothing. */
+  const pickCheckout = async (target: vscode.Uri | CurrentNode | undefined, title: string) => {
+    let checkout =
+      target instanceof vscode.Uri
+        ? tracker.find(target)
+        : target?.type === "checkout"
+          ? target.checkout
+          : statusBar.current();
     if (!checkout && tracker.all.length > 1) {
       const picked = await vscode.window.showQuickPick(
         tracker.all.map((c) => ({ label: c.name, description: c.folder.uri.fsPath, checkout: c })),
@@ -66,11 +72,11 @@ export function activate(context: vscode.ExtensionContext): void {
     }
     return checkout;
   };
-  const pull = async (folder?: vscode.Uri) => {
+  const pull = async (folder?: vscode.Uri | CurrentNode) => {
     const checkout = await pickCheckout(folder, "Pull which workspace?");
     if (checkout) await pulls.pull(checkout);
   };
-  const push = async (folder?: vscode.Uri) => {
+  const push = async (folder?: vscode.Uri | CurrentNode) => {
     const checkout = await pickCheckout(folder, "Push which workspace?");
     if (checkout) await pushes.push(checkout);
   };

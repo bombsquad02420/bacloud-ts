@@ -9,7 +9,9 @@ import type { Checkout, CheckoutTracker } from "./folders.ts";
 import type { PullManager } from "./pull.ts";
 import { timeAgo } from "./statusBar.ts";
 
-type Node = { type: "checkout"; checkout: Checkout } | { type: "row"; item: vscode.TreeItem };
+export type CurrentNode =
+  | { type: "checkout"; checkout: Checkout }
+  | { type: "row"; item: vscode.TreeItem };
 
 function row(
   label: string,
@@ -20,7 +22,7 @@ function row(
     command?: vscode.Command;
     color?: string;
   } = {},
-): Node {
+): CurrentNode {
   const item = new vscode.TreeItem(label);
   item.iconPath = new vscode.ThemeIcon(
     icon,
@@ -32,7 +34,9 @@ function row(
   return { type: "row", item };
 }
 
-export class CurrentWorkspaceView implements vscode.TreeDataProvider<Node>, vscode.Disposable {
+export class CurrentWorkspaceView
+  implements vscode.TreeDataProvider<CurrentNode>, vscode.Disposable
+{
   private readonly tracker: CheckoutTracker;
   private readonly pulls: PullManager;
   private readonly changed = new vscode.EventEmitter<void>();
@@ -56,13 +60,13 @@ export class CurrentWorkspaceView implements vscode.TreeDataProvider<Node>, vsco
     this.timer = setInterval(refresh, 60_000);
   }
 
-  getChildren(node?: Node): Node[] {
+  getChildren(node?: CurrentNode): CurrentNode[] {
     if (!node) return this.tracker.all.map((checkout) => ({ type: "checkout", checkout }));
     if (node.type === "checkout") return this.details(node.checkout);
     return [];
   }
 
-  getTreeItem(node: Node): vscode.TreeItem {
+  getTreeItem(node: CurrentNode): vscode.TreeItem {
     if (node.type === "row") return node.item;
     const { checkout } = node;
     const item = new vscode.TreeItem(checkout.name, vscode.TreeItemCollapsibleState.Expanded);
@@ -91,8 +95,8 @@ export class CurrentWorkspaceView implements vscode.TreeDataProvider<Node>, vsco
     return checkout.record ? new Date(checkout.record.syncedAt) : checkout.stateModified;
   }
 
-  private details(checkout: Checkout): Node[] {
-    const rows: Node[] = [];
+  private details(checkout: Checkout): CurrentNode[] {
+    const rows: CurrentNode[] = [];
     const folder = checkout.folder.uri;
     const fleet = currentFleet();
     const staged = this.pulls.staged;
@@ -132,17 +136,6 @@ export class CurrentWorkspaceView implements vscode.TreeDataProvider<Node>, vsco
             .join(", "),
           command: { command: "bacloud.changes.focus", title: "Review" },
           color: conflicts ? "list.warningForeground" : undefined,
-        }),
-      );
-    } else {
-      rows.push(
-        row("Pull", "cloud-download", {
-          description: "get cloud changes",
-          command: { command: "bacloud.pull", title: "Pull", arguments: [folder] },
-        }),
-        row("Push", "cloud-upload", {
-          description: "upload local changes",
-          command: { command: "bacloud.push", title: "Push", arguments: [folder] },
         }),
       );
     }

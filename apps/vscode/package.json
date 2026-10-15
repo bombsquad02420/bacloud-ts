@@ -29,7 +29,7 @@
         {
           "id": "ballistica",
           "title": "Ballistica",
-          "icon": "media/cloud.svg"
+          "icon": "media/bomb.svg"
         }
       ]
     },
@@ -147,16 +147,6 @@
     ],
     "menus": {
       "view/title": [
-        {
-          "command": "bacloud.pull",
-          "when": "view == bacloud.current && bacloud.inCheckout && !bacloud.pullStaged",
-          "group": "navigation@1"
-        },
-        {
-          "command": "bacloud.push",
-          "when": "view == bacloud.current && bacloud.inCheckout && !bacloud.pullStaged",
-          "group": "navigation@2"
-        },
         {
           "command": "bacloud.refreshWorkspaces",
           "when": "view == bacloud.workspaces && bacloud.signedIn",

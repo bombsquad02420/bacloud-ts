@@ -89,7 +89,7 @@ Disk cost: one extra copy of each workspace (staging), plus only the files that 
 
 A **Ballistica** container in the **activity bar** with three sections:
 
-- **Current Workspace**: each cloud checkout open in the window, expanded, with a one-line status as its description and an inline **Pull**. Under it: the status row with its action (**Pull**, **Review incoming changes**, or a warning for a broken state file or fleet mismatch), then **Last sync**, **Fleet**, **Snapshot** and **Folder** (click to reveal). **Push** joins here when it exists. With no checkout open, a welcome link offers **Clone a Workspace**.
+- **Current Workspace**: each cloud checkout open in the window, expanded, with a one-line status as its description and inline **Pull** and **Push** icons (the only place they appear in this view). Under it, info rows: a status row only when something needs attention (**Review incoming changes**, a broken state file or a fleet mismatch), then **Last sync**, **Fleet**, **Snapshot** and **Folder** (click to reveal). With no checkout open, a welcome link offers **Clone a Workspace**.
 - **Incoming Changes** (only while a pull is staged): groups _Conflicts_, _Incoming_, _Local only_. Click to diff. Inline **Take Cloud** / **Keep Local**. Title actions **Apply All Incoming**, **Discard Pull**.
 - **Cloud Workspaces**: signed out, a **Sign in** welcome link; signed in, one item per cloud workspace (name; type, size and age as description) with an inline **Clone**. Title actions: **Refresh**, **Sign out**.
 
