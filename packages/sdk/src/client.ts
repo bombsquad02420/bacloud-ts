@@ -25,6 +25,12 @@ import {
   BACLOUD_VERSION,
 } from "./protocol/bacloud.ts";
 import { BacloudSession } from "./session.ts";
+import {
+  readWorkspaceState,
+  updateWorkspaceState,
+  WorkspaceStateError,
+  type WorkspaceState,
+} from "./workspaceState.ts";
 import type { Dialer } from "./transport/transport.ts";
 
 /** A failure the server or protocol reported; message is user-facing. */
@@ -110,12 +116,6 @@ export interface RunResult {
 }
 
 type Call = [string, Record<string, unknown>];
-
-/**
- * Per-checkout file recording the snapshot id we last synced to. A
- * dotfile, so workspace syncs ignore it.
- */
-export const WORKSPACE_STATE_FILENAME = ".bacloudstate.json";
 
 interface WorkspaceGuard {
   /** Args to actually send. */
@@ -233,7 +233,7 @@ export class BacloudClient {
    * Optimistic-concurrency setup for `workspace get`/`put`.
    *
    * A get records the workspace's snapshot id in the target dir's
-   * {@link WORKSPACE_STATE_FILENAME}; a put sends it back as
+   * `.bacloudstate.json`; a put sends it back as
    * `--expected-snapshotid` so the server refuses to overwrite a
    * workspace that changed since. The client-only `--force` flag skips
    * that check.
@@ -255,41 +255,47 @@ export class BacloudClient {
       else if (!token.startsWith("--")) positionals.push(token);
     }
     const dir = resolvePath(cwd, positionals[0] ?? ".");
-    if (args[1] === "get") return { args, dir, name };
+    const isPut = args[1] === "put";
+    const force = isPut && args.includes("--force");
+    let sent = force ? args.filter((a) => a !== "--force") : args;
 
-    if (args.includes("--force")) {
+    let state: WorkspaceState | undefined;
+    try {
+      state = await readWorkspaceState(this.options.host.fs, dir);
+    } catch (err) {
+      if (!(err instanceof WorkspaceStateError)) throw err;
+      // Fail closed: a put without the guard could overwrite newer
+      // work. A get rewrites the file anyway.
+      if (isPut && !force) {
+        throw new BacloudError(`${err.message} (Or pass --force to put without the check.)`);
+      }
+    }
+
+    // The recorded name wins over the folder's name, so a renamed or
+    // moved checkout still targets the workspace it came from.
+    if (name === undefined && state?.name !== undefined) {
+      name = state.name;
+      sent = [...sent, "--workspace", name];
+    }
+
+    if (force) {
       this.options.host.stderr(
         "WARNING: --force skips the changed-since-last-get check.\n" +
           "Your local copy wins outright; nothing is merged. A stale local workspace.json " +
           "will overwrite server-maintained state in it (translation up-to-date stamps, " +
           "wrap params, caches), which can silently restale every string in the package.\n",
       );
-      return { args: args.filter((a) => a !== "--force"), dir, name };
+    } else if (isPut && state?.snapshotid !== undefined) {
+      sent = [...sent, "--expected-snapshotid", state.snapshotid];
     }
-    const snapshotId = await this.readWorkspaceState(dir);
-    const guarded =
-      snapshotId === undefined ? args : [...args, "--expected-snapshotid", snapshotId];
-    return { args: guarded, dir, name };
-  }
-
-  private async readWorkspaceState(dir: string): Promise<string | undefined> {
-    try {
-      const data = await this.options.host.fs.readFile(joinPath(dir, WORKSPACE_STATE_FILENAME));
-      const parsed = JSON.parse(new TextDecoder().decode(data)) as { snapshotid?: unknown };
-      return typeof parsed.snapshotid === "string" ? parsed.snapshotid : undefined;
-    } catch {
-      return undefined;
-    }
+    return { args: sent, dir, name };
   }
 
   private async saveWorkspaceState(guard: WorkspaceGuard, snapshotId: string): Promise<void> {
-    const state: Record<string, string> = { snapshotid: snapshotId };
-    if (guard.name !== undefined) state["name"] = guard.name;
+    const patch: WorkspaceState = { snapshotid: snapshotId };
+    if (guard.name !== undefined) patch.name = guard.name;
     try {
-      await this.options.host.fs.writeFile(
-        joinPath(guard.dir, WORKSPACE_STATE_FILENAME),
-        new TextEncoder().encode(JSON.stringify(state)),
-      );
+      await updateWorkspaceState(this.options.host.fs, guard.dir, patch);
     } catch (err) {
       // Non-fatal: the sync succeeded; a later put just skips the check.
       this.options.log?.(`could not save workspace state: ${String(err)}`);

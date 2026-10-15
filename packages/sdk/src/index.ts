@@ -6,3 +6,4 @@ export * from "./session.ts";
 export * from "./host.ts";
 export * from "./client.ts";
 export * from "./workspaces.ts";
+export * from "./workspaceState.ts";

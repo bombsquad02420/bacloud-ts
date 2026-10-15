@@ -202,11 +202,15 @@ describe("workspace collision guard", () => {
       "workspace",
       "put",
       "./WS/",
+      "--workspace",
+      "Named",
       "--expected-snapshotid",
       "snap-1",
     ]);
+    // The put had no --workspace, but the name from the get is kept.
     expect(JSON.parse(await readFile(join(dir, ".bacloudstate.json"), "utf8"))).toEqual({
       snapshotid: "snap-2",
+      name: "Named",
     });
     await client.close();
   });
@@ -240,4 +244,15 @@ describe("workspace collision guard", () => {
     ]);
     await client.close();
   });
+});
+
+test("put refuses when the state file is corrupt (fail closed)", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "bacloud-"));
+  await writeFile(join(dir, ".bacloudstate.json"), "{not json");
+  const { host } = testHost();
+  const { client } = await connect(host);
+  await expect(client.run(["workspace", "put"], { cwd: dir })).rejects.toThrow(
+    /unreadable.*--force/s,
+  );
+  await client.close();
 });
