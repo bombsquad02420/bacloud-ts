@@ -85,6 +85,24 @@ export interface Checkout {
   stateModified: Date | undefined;
 }
 
+/**
+ * Whether the folder's staging copy is exactly what it was last synced
+ * to, i.e. a trustworthy base for telling local edits from cloud ones.
+ * Another tool syncing the folder breaks that.
+ */
+export async function hasKnownBase(checkout: Checkout, store: FolderStore): Promise<boolean> {
+  // Read fresh: the tracker's copy can lag a sync that just happened.
+  const folder = checkout.folder.uri.fsPath;
+  const record = await store.read(folder);
+  const state = await readWorkspaceState(nodeFileHost, folder).catch(() => undefined);
+  if (!record || state?.snapshotid === undefined || record.snapshotId !== state.snapshotid)
+    return false;
+  return stat(store.stagingDir(folder)).then(
+    (s) => s.isDirectory(),
+    () => false,
+  );
+}
+
 /** Tracks checkouts among the window's workspace folders. */
 export class CheckoutTracker implements vscode.Disposable {
   private readonly store: FolderStore;

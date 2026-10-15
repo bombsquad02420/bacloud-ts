@@ -93,5 +93,8 @@ Until step 1 lands upstream, the Python client will strip new keys on its next w
 
 ## Also worth considering
 
+- **An ignore file (`.bacloudignore`).** The server syncs everything except dot-named files and rejects a whole put if any file has an unsupported extension (verified 2026-10-16). So a checkout that also holds `.git/`, `.vscode/` or editor scratch files either leaks them into the cloud or can't be pushed at all. A gitignore-style file read by every client would fix both.
+- **Validate before uploading.** Clients could check extensions locally and list every offending file, instead of the server reporting the first one after the round trip.
+
 - **`.gitignore` advice:** the file is per-checkout state. Committing it shares one snapshot id across clones and can make the collision guard pass for a stale copy. Recommend ignoring `.bacloudstate.json` and `.bacloud/`.
 - **Status for wrappers:** `pcommand assetworkspace` already compares local and cloud snapshot ids. With the fields above it could also catch fleet and account mismatches.

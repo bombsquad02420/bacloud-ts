@@ -9,26 +9,41 @@ import * as vscode from "vscode";
 import type { Change, ConflictReason, Edit } from "@bacloud/sdk";
 import type { PullManager } from "./pull.ts";
 
-/** Read-only documents for the cloud side of a diff (staging files). */
+/**
+ * Read-only documents for the cloud side of a diff. The query holds the
+ * staging folder to read from; an empty query stands in for a side
+ * where the file doesn't exist.
+ */
 export const CLOUD_SCHEME = "bacloud-cloud";
 
 export class CloudContentProvider implements vscode.TextDocumentContentProvider {
-  private readonly pulls: PullManager;
-
-  constructor(pulls: PullManager) {
-    this.pulls = pulls;
-  }
-
   async provideTextDocumentContent(uri: vscode.Uri): Promise<string> {
-    const staging = this.pulls.staged?.staging;
-    // `empty` stands in for a side where the file doesn't exist.
-    if (!staging || uri.query === "empty") return "";
+    if (!uri.query) return "";
     try {
-      return await readFile(join(staging, uri.path), "utf8");
+      return await readFile(join(uri.query, uri.path), "utf8");
     } catch {
       return "";
     }
   }
+}
+
+/** Open a diff of `change`: the cloud copy in `staging` against the folder. */
+export async function openChangeDiff(
+  staging: string,
+  folder: string,
+  change: Change,
+): Promise<void> {
+  const local = vscode.Uri.file(join(folder, change.path));
+  const cloud = vscode.Uri.from({ scheme: CLOUD_SCHEME, path: `/${change.path}`, query: staging });
+  const missing = vscode.Uri.from({ scheme: CLOUD_SCHEME, path: `/${change.path}` });
+  const { cloud: cloudExists, local: localExists } = sides(change);
+  await vscode.commands.executeCommand(
+    "vscode.diff",
+    cloudExists ? cloud : missing,
+    localExists ? local : missing,
+    `${change.path} (Cloud ↔ Local)`,
+    { preview: true },
+  );
 }
 
 type Group = "conflict" | "incoming" | "local";
@@ -139,24 +154,7 @@ export class ChangesView implements vscode.TreeDataProvider<ChangeNode>, vscode.
   /** Cloud on the left, local on the right. */
   async open(change: Change): Promise<void> {
     const pull = this.pulls.staged;
-    if (!pull) return;
-    const folder = pull.checkout.folder.uri.fsPath;
-    const local = vscode.Uri.file(join(folder, change.path));
-    const cloudPath = vscode.Uri.from({ scheme: CLOUD_SCHEME, path: `/${change.path}` });
-    const missing = vscode.Uri.from({
-      scheme: CLOUD_SCHEME,
-      path: `/${change.path}`,
-      query: "empty",
-    });
-
-    const { cloud: cloudExists, local: localExists } = sides(change);
-    await vscode.commands.executeCommand(
-      "vscode.diff",
-      cloudExists ? cloudPath : missing,
-      localExists ? local : missing,
-      `${change.path} (Cloud ↔ Local)`,
-      { preview: true },
-    );
+    if (pull) await openChangeDiff(pull.staging, pull.checkout.folder.uri.fsPath, change);
   }
 
   dispose(): void {

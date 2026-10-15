@@ -15,7 +15,6 @@
  */
 
 import type { FileHost } from "./host.ts";
-import { WORKSPACE_STATE_FILENAME } from "./workspaceState.ts";
 
 export interface FileInfo {
   sha256: string;
@@ -46,9 +45,41 @@ export type Change =
   /** Both changed it, differently. */
   | { path: string; kind: "conflict"; reason: ConflictReason };
 
-/** Files that belong to the checkout, never to the workspace. */
+/**
+ * Files the server never syncs: any file whose *name* starts with a dot
+ * (`.bacloudstate.json`, `.DS_Store`, `sub/.notes.txt`). Files inside
+ * dot-*folders* (`.vscode/settings.json`) are synced like any other.
+ * Observed against prod, 2026-10-16.
+ */
 export function isLocalOnly(path: string): boolean {
-  return path === WORKSPACE_STATE_FILENAME;
+  const name = path.slice(path.lastIndexOf("/") + 1);
+  return name.startsWith(".");
+}
+
+/**
+ * File types the server accepts. A put containing any other synced file
+ * is rejected as a whole. Observed against prod, 2026-10-16; the server
+ * stays the authority, this only lets clients warn before uploading.
+ */
+export const ALLOWED_EXTENSIONS: readonly string[] = [
+  ".py",
+  ".txt",
+  ".json",
+  ".png",
+  ".jpg",
+  ".obj",
+  ".toml",
+  ".bstr",
+  ".apref",
+  ".wav",
+  ".bchar",
+];
+
+/** Paths (from a workspace manifest) the server would refuse. */
+export function unsupportedFiles(paths: Iterable<string>): string[] {
+  return [...paths].filter(
+    (path) => !ALLOWED_EXTENSIONS.some((ext) => path.toLowerCase().endsWith(ext)),
+  );
 }
 
 /** A folder's manifest without local-only files. */

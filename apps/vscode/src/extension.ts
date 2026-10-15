@@ -7,6 +7,7 @@ import { CurrentWorkspaceView } from "./currentView.ts";
 import { Cloud } from "./cloud.ts";
 import { CheckoutTracker, FolderStore } from "./folders.ts";
 import { PullManager } from "./pull.ts";
+import { PushManager } from "./push.ts";
 import { CheckoutStatusBar } from "./statusBar.ts";
 import { WorkspacesView, type WorkspaceNode } from "./workspacesView.ts";
 
@@ -17,7 +18,9 @@ export function activate(context: vscode.ExtensionContext): void {
   const workspaces = new WorkspacesView(cloud, auth);
   const store = new FolderStore(context.globalStorageUri);
   const tracker = new CheckoutTracker(store);
-  const pulls = new PullManager({ cloud, auth, store, log });
+  const rescan = () => tracker.rescan();
+  const pulls = new PullManager({ cloud, auth, store, log, rescan });
+  const pushes = new PushManager({ cloud, auth, store, pulls, log, rescan });
   const changes = new ChangesView(pulls);
   const statusBar = new CheckoutStatusBar(tracker, pulls);
 
@@ -49,21 +52,27 @@ export function activate(context: vscode.ExtensionContext): void {
     if (name) await cloneWorkspace(name, { cloud, auth, store });
   };
 
-  const pull = async (folder?: vscode.Uri) => {
+  const pickCheckout = async (folder: vscode.Uri | undefined, title: string) => {
     let checkout = folder ? tracker.find(folder) : statusBar.current();
     if (!checkout && tracker.all.length > 1) {
       const picked = await vscode.window.showQuickPick(
         tracker.all.map((c) => ({ label: c.name, description: c.folder.uri.fsPath, checkout: c })),
-        { title: "Pull which workspace?" },
+        { title },
       );
       checkout = picked?.checkout;
     }
-    if (!checkout) {
-      if (tracker.all.length === 0)
-        throw new Error("No open folder is a Ballistica cloud workspace.");
-      return;
+    if (!checkout && tracker.all.length === 0) {
+      throw new Error("No open folder is a Ballistica cloud workspace.");
     }
-    await pulls.pull(checkout);
+    return checkout;
+  };
+  const pull = async (folder?: vscode.Uri) => {
+    const checkout = await pickCheckout(folder, "Pull which workspace?");
+    if (checkout) await pulls.pull(checkout);
+  };
+  const push = async (folder?: vscode.Uri) => {
+    const checkout = await pickCheckout(folder, "Push which workspace?");
+    if (checkout) await pushes.push(checkout);
   };
   /** Tree inline actions pass a node; the palette passes nothing. */
   const changePath = (node?: ChangeNode) => {
@@ -85,15 +94,13 @@ export function activate(context: vscode.ExtensionContext): void {
     ),
     vscode.window.registerTreeDataProvider("bacloud.workspaces", workspaces),
     vscode.window.registerTreeDataProvider("bacloud.changes", changes),
-    vscode.workspace.registerTextDocumentContentProvider(
-      CLOUD_SCHEME,
-      new CloudContentProvider(pulls),
-    ),
+    vscode.workspace.registerTextDocumentContentProvider(CLOUD_SCHEME, new CloudContentProvider()),
     command("bacloud.signIn", () => auth.signIn()),
     command("bacloud.signOut", () => auth.signOut()),
     command("bacloud.refreshWorkspaces", () => workspaces.refresh()),
     command("bacloud.clone", clone),
     command("bacloud.pull", pull),
+    command("bacloud.push", push),
     command("bacloud.openChange", (node?: ChangeNode) =>
       node?.type === "change" ? changes.open(node.change) : undefined,
     ),

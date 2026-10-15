@@ -75,3 +75,15 @@ test("workspaceManifest skips the state file and uses forward slashes", async ()
   await writeFile(join(dir, ".bacloudstate.json"), "{}");
   expect(Object.keys(await workspaceManifest(nodeFileHost, dir))).toEqual(["sub/a.txt"]);
 });
+
+test("local-only means a dot-named file, not a file in a dot-folder", async () => {
+  const { isLocalOnly, unsupportedFiles } = await import("../src/changes.ts");
+  expect(isLocalOnly(".bacloudstate.json")).toBe(true);
+  expect(isLocalOnly("sub/.DS_Store")).toBe(true);
+  expect(isLocalOnly(".vscode/settings.json")).toBe(false);
+  expect(isLocalOnly("test.py")).toBe(false);
+  expect(unsupportedFiles(["a.py", "B.PNG", ".git/HEAD", "notes.md"])).toEqual([
+    ".git/HEAD",
+    "notes.md",
+  ]);
+});

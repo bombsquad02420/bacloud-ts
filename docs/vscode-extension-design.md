@@ -114,9 +114,18 @@ Settings: `bacloud.fleet` (default `prod`), `bacloud.pullOnOpen` (default off; w
 5. `.bacloudstate.json` writes must preserve unknown keys and be atomic. The SDK currently writes only `{snapshotid, name}`; fix it.
 6. Fix the CLI's EPIPE crash when stdout closes early.
 
+## Server sync rules (verified 2026-10-16)
+
+- Files whose **name** starts with `.` are never synced (`.bacloudstate.json`, `.DS_Store`). Files inside dot-**folders** (`.vscode/settings.json`) are synced like any other.
+- Every synced file must end in `.py .txt .json .png .jpg .obj .toml .bstr .apref .wav .bchar`. One other file makes the **whole put** fail ("Invalid file name …"). A folder containing `.git/` can't be pushed.
+- Push previews flag unsupported files before uploading; the server stays the authority.
+
+## Push
+
+Local changes = the folder against its staging copy (the cloud at the last sync). Push requires a known base (otherwise: pull first), no pull under review, and a matching fleet. It saves dirty editors, shows the changes in a quick pick (select a file to diff, or **Push N changes**), then runs `workspace put` with the collision guard. If the cloud moved on, it offers to pull. On success the staging copy is updated from the folder, so the next sync starts from the right base.
+
 ## Open questions to verify
 
-- Does the server skip dotfiles/dot-dirs (e.g. `.vscode/`, `.git/`) on get and put? The Python source implies so for `.bacloudstate.json`.
 - Is `_open.mergeEditor` usable from an extension in current VS Code?
 - Hard links need `base/` and `staging/` on one volume. They are siblings, so they always are; if `link()` still fails (e.g. a filesystem without hard links), fall back to a full copy.
 

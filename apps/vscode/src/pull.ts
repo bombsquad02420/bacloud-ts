@@ -29,7 +29,7 @@ import {
 import { nodeFileHost } from "@bacloud/sdk/node";
 import type { Auth } from "./auth.ts";
 import { currentFleet, type Cloud } from "./cloud.ts";
-import type { Checkout, FolderStore } from "./folders.ts";
+import { hasKnownBase, type Checkout, type FolderStore } from "./folders.ts";
 import { exists, linkTree, replaceDir } from "./fsutil.ts";
 
 /** A pull waiting for review. */
@@ -55,6 +55,8 @@ export class PullManager implements vscode.Disposable {
   private readonly auth: Auth;
   private readonly store: FolderStore;
   private readonly log: vscode.LogOutputChannel;
+  /** Re-read checkouts after a sync so views show the new state. */
+  private readonly rescan: () => Promise<void>;
   private readonly changed = new vscode.EventEmitter<void>();
   readonly onDidChange = this.changed.event;
   private current: StagedPull | undefined;
@@ -65,11 +67,13 @@ export class PullManager implements vscode.Disposable {
     auth: Auth;
     store: FolderStore;
     log: vscode.LogOutputChannel;
+    rescan: () => Promise<void>;
   }) {
     this.cloud = deps.cloud;
     this.auth = deps.auth;
     this.store = deps.store;
     this.log = deps.log;
+    this.rescan = deps.rescan;
   }
 
   get staged(): StagedPull | undefined {
@@ -112,10 +116,7 @@ export class PullManager implements vscode.Disposable {
 
       // Staging is a trustworthy base only if it is what this folder
       // was last synced to. Another tool syncing the folder breaks that.
-      const baseKnown =
-        record !== undefined &&
-        record.snapshotId === checkout.state?.snapshotid &&
-        (await exists(staging));
+      const baseKnown = await hasKnownBase(checkout, this.store);
       if (!record) {
         this.log.info(`${checkout.name}: no record yet; adopting the ${fleet} fleet.`);
       } else if (!baseKnown) {
@@ -264,6 +265,7 @@ export class PullManager implements vscode.Disposable {
     });
     await rm(pull.base, { recursive: true, force: true });
     this.current = undefined;
+    await this.rescan();
     this.changed.fire();
   }
 

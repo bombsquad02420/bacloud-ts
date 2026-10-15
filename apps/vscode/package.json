@@ -109,6 +109,13 @@
         "enablement": "isWorkspaceTrusted"
       },
       {
+        "command": "bacloud.push",
+        "title": "Push",
+        "category": "Ballistica",
+        "icon": "$(cloud-upload)",
+        "enablement": "isWorkspaceTrusted"
+      },
+      {
         "command": "bacloud.openChange",
         "title": "Compare with Cloud",
         "category": "Ballistica"
@@ -144,6 +151,11 @@
           "command": "bacloud.pull",
           "when": "view == bacloud.current && bacloud.inCheckout && !bacloud.pullStaged",
           "group": "navigation@1"
+        },
+        {
+          "command": "bacloud.push",
+          "when": "view == bacloud.current && bacloud.inCheckout && !bacloud.pullStaged",
+          "group": "navigation@2"
         },
         {
           "command": "bacloud.refreshWorkspaces",
@@ -202,6 +214,10 @@
         {
           "command": "bacloud.keepLocal",
           "when": "false"
+        },
+        {
+          "command": "bacloud.push",
+          "when": "bacloud.inCheckout && bacloud.signedIn"
         }
       ],
       "view/item/context": [
@@ -227,6 +243,11 @@
         },
         {
           "command": "bacloud.pull",
+          "when": "view == bacloud.current && viewItem == checkout",
+          "group": "inline"
+        },
+        {
+          "command": "bacloud.push",
           "when": "view == bacloud.current && viewItem == checkout",
           "group": "inline"
         }

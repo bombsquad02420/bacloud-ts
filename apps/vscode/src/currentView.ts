@@ -140,6 +140,10 @@ export class CurrentWorkspaceView implements vscode.TreeDataProvider<Node>, vsco
           description: "get cloud changes",
           command: { command: "bacloud.pull", title: "Pull", arguments: [folder] },
         }),
+        row("Push", "cloud-upload", {
+          description: "upload local changes",
+          command: { command: "bacloud.push", title: "Push", arguments: [folder] },
+        }),
       );
     }
 
