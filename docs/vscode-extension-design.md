@@ -87,12 +87,11 @@ Disk cost: one extra copy of each workspace (staging), plus only the files that 
 
 ## UI
 
-No activity-bar icon. One **Ballistica** view container in the **bottom panel** (next to Terminal and Output) with two views:
+A **Ballistica** container in the **activity bar** with three sections:
 
-- **Cloud Workspaces**
-  - Signed out: `viewsWelcome` with a **Sign in** link.
-  - Signed in: one item per cloud workspace (name; type and size as description). Inline **Clone…** (pick a parent folder; the workspace name is the folder name), and **Open** when a known local clone exists. Title actions: **Refresh**, **Sign out**, fleet indicator.
-- **Incoming Changes** (visible when a pull is staged): groups _Conflicts_, _Incoming_, _Local only_. Click to diff. Inline **Apply** / **Take cloud** / **Keep mine**. Title action **Apply all incoming**, **Discard pull**.
+- **Current Workspace**: each cloud checkout open in the window, expanded, with a one-line status as its description and an inline **Pull**. Under it: the status row with its action (**Pull**, **Review incoming changes**, or a warning for a broken state file or fleet mismatch), then **Last sync**, **Fleet**, **Snapshot** and **Folder** (click to reveal). **Push** joins here when it exists. With no checkout open, a welcome link offers **Clone a Workspace**.
+- **Incoming Changes** (only while a pull is staged): groups _Conflicts_, _Incoming_, _Local only_. Click to diff. Inline **Take Cloud** / **Keep Local**. Title actions **Apply All Incoming**, **Discard Pull**.
+- **Cloud Workspaces**: signed out, a **Sign in** welcome link; signed in, one item per cloud workspace (name; type, size and age as description) with an inline **Clone**. Title actions: **Refresh**, **Sign out**.
 
 Status bar (only in a bacloud workspace): `☁ Workspace1 · synced 5m ago`. States: syncing (spinner), _n_ incoming, conflicts, fleet mismatch, broken state file. Click → **Pull** if nothing is staged, otherwise reveal Incoming Changes.
 

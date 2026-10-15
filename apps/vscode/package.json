@@ -25,7 +25,7 @@
   },
   "contributes": {
     "viewsContainers": {
-      "panel": [
+      "activitybar": [
         {
           "id": "ballistica",
           "title": "Ballistica",
@@ -36,13 +36,17 @@
     "views": {
       "ballistica": [
         {
-          "id": "bacloud.workspaces",
-          "name": "Cloud Workspaces"
+          "id": "bacloud.current",
+          "name": "Current Workspace"
         },
         {
           "id": "bacloud.changes",
           "name": "Incoming Changes",
           "when": "bacloud.pullStaged"
+        },
+        {
+          "id": "bacloud.workspaces",
+          "name": "Cloud Workspaces"
         }
       ]
     },
@@ -51,6 +55,16 @@
         "view": "bacloud.workspaces",
         "contents": "Sign in to Ballistica to see your cloud workspaces.\n[Sign in](command:bacloud.signIn)",
         "when": "!bacloud.signedIn"
+      },
+      {
+        "view": "bacloud.current",
+        "contents": "No open folder is a Ballistica cloud workspace.\n[Clone a Workspace](command:bacloud.clone)",
+        "when": "bacloud.signedIn && !bacloud.inCheckout"
+      },
+      {
+        "view": "bacloud.current",
+        "contents": "No open folder is a Ballistica cloud workspace. Sign in to clone one.",
+        "when": "!bacloud.signedIn && !bacloud.inCheckout"
       }
     ],
     "commands": [
@@ -126,6 +140,11 @@
     ],
     "menus": {
       "view/title": [
+        {
+          "command": "bacloud.pull",
+          "when": "view == bacloud.current && bacloud.inCheckout && !bacloud.pullStaged",
+          "group": "navigation@1"
+        },
         {
           "command": "bacloud.refreshWorkspaces",
           "when": "view == bacloud.workspaces && bacloud.signedIn",
@@ -205,6 +224,11 @@
           "command": "bacloud.keepLocal",
           "when": "view == bacloud.changes && viewItem == conflict",
           "group": "inline@2"
+        },
+        {
+          "command": "bacloud.pull",
+          "when": "view == bacloud.current && viewItem == checkout",
+          "group": "inline"
         }
       ]
     },

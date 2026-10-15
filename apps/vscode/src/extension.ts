@@ -3,6 +3,7 @@ import { BacloudError, BacloudSessionError } from "@bacloud/sdk";
 import { Auth } from "./auth.ts";
 import { ChangesView, CLOUD_SCHEME, CloudContentProvider, type ChangeNode } from "./changesView.ts";
 import { cloneWorkspace } from "./clone.ts";
+import { CurrentWorkspaceView } from "./currentView.ts";
 import { Cloud } from "./cloud.ts";
 import { CheckoutTracker, FolderStore } from "./folders.ts";
 import { PullManager } from "./pull.ts";
@@ -78,6 +79,10 @@ export function activate(context: vscode.ExtensionContext): void {
     pulls,
     changes,
     statusBar,
+    vscode.window.registerTreeDataProvider(
+      "bacloud.current",
+      new CurrentWorkspaceView(tracker, pulls),
+    ),
     vscode.window.registerTreeDataProvider("bacloud.workspaces", workspaces),
     vscode.window.registerTreeDataProvider("bacloud.changes", changes),
     vscode.workspace.registerTextDocumentContentProvider(
