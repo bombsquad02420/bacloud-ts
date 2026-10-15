@@ -10,9 +10,12 @@ TypeScript implementation of the Ballistica cloud (`bacloud`) client.
 
 ```bash
 vp install
+vp run -r build   # build first: the CLI and extension use the SDK's dist/
+vp check
 vp run -r test
-vp run -r build
 ```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, live testing and the VS Code extension.
 
 The SDK and CLI are ported from [ballistica](https://github.com/efroemling/ballistica) `5cd0916442fd` (v1.8.1, bacloud protocol 29). [UPSTREAM.md](UPSTREAM.md) maps each file to its upstream counterpart and lists every behaviour difference.
 
