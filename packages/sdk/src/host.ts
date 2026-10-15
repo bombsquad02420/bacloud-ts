@@ -10,6 +10,11 @@
 import type { DirectoryManifest } from "./protocol/bacloud.ts";
 
 export interface FileHost {
+  // Contract: writeFile replaces a file by writing a new one and renaming
+  // it into place, and deleteFile unlinks. Neither may modify an existing
+  // file's bytes in place: pulls keep the previous sync as hard links,
+  // which must still hold the old content afterwards.
+
   /** sha256+size of every file under `path` (or of `path` itself). */
   manifest(path: string): Promise<DirectoryManifest>;
   readFile(path: string): Promise<Uint8Array>;
