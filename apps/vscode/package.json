@@ -70,6 +70,17 @@
         "command": "bacloud.showLog",
         "title": "Show Log",
         "category": "Ballistica"
+      },
+      {
+        "command": "bacloud.clone",
+        "title": "Clone Cloud Workspace…",
+        "category": "Ballistica",
+        "icon": "$(repo-clone)"
+      },
+      {
+        "command": "bacloud.showPanel",
+        "title": "Show Ballistica Panel",
+        "category": "Ballistica"
       }
     ],
     "menus": {
@@ -93,6 +104,22 @@
         {
           "command": "bacloud.refreshWorkspaces",
           "when": "bacloud.signedIn"
+        },
+        {
+          "command": "bacloud.clone",
+          "when": "bacloud.signedIn"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "bacloud.clone",
+          "when": "view == bacloud.workspaces && viewItem == workspace",
+          "group": "inline"
+        },
+        {
+          "command": "bacloud.clone",
+          "when": "view == bacloud.workspaces && viewItem == workspace",
+          "group": "1_clone"
         }
       ]
     },

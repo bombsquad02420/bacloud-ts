@@ -7,17 +7,17 @@ import { parseWorkspaceList, stripAnsi, type WorkspaceListing } from "@bacloud/s
 import type { Auth } from "./auth.ts";
 import type { Cloud } from "./cloud.ts";
 
-type Node =
+export type WorkspaceNode =
   | { kind: "workspace"; listing: WorkspaceListing }
   | { kind: "message"; text: string; error: boolean };
 
-export class WorkspacesView implements vscode.TreeDataProvider<Node>, vscode.Disposable {
+export class WorkspacesView implements vscode.TreeDataProvider<WorkspaceNode>, vscode.Disposable {
   private readonly cloud: Cloud;
   private readonly auth: Auth;
   private readonly changed = new vscode.EventEmitter<void>();
   readonly onDidChangeTreeData = this.changed.event;
   /** Cached result; `undefined` means fetch on next render. */
-  private nodes: Promise<Node[]> | undefined;
+  private nodes: Promise<WorkspaceNode[]> | undefined;
   private readonly subscription: vscode.Disposable;
 
   constructor(cloud: Cloud, auth: Auth) {
@@ -26,12 +26,19 @@ export class WorkspacesView implements vscode.TreeDataProvider<Node>, vscode.Dis
     this.subscription = auth.onDidChange(() => this.refresh());
   }
 
+  /** Workspace names for pickers, using the cached list when possible. */
+  async names(): Promise<string[]> {
+    this.nodes ??= this.load();
+    const nodes = await this.nodes;
+    return nodes.flatMap((n) => (n.kind === "workspace" ? [n.listing.name] : []));
+  }
+
   refresh(): void {
     this.nodes = undefined;
     this.changed.fire();
   }
 
-  getTreeItem(node: Node): vscode.TreeItem {
+  getTreeItem(node: WorkspaceNode): vscode.TreeItem {
     if (node.kind === "message") {
       const item = new vscode.TreeItem(node.text);
       item.iconPath = new vscode.ThemeIcon(node.error ? "error" : "info");
@@ -49,13 +56,13 @@ export class WorkspacesView implements vscode.TreeDataProvider<Node>, vscode.Dis
     return item;
   }
 
-  getChildren(node?: Node): Thenable<Node[]> | Node[] {
+  getChildren(node?: WorkspaceNode): Thenable<WorkspaceNode[]> | WorkspaceNode[] {
     if (node) return [];
     this.nodes ??= this.load();
     return this.nodes;
   }
 
-  private async load(): Promise<Node[]> {
+  private async load(): Promise<WorkspaceNode[]> {
     const bearer = await this.auth.token();
     // Signed out: the welcome view takes over.
     if (bearer === undefined) return [];
