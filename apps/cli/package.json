@@ -1,0 +1,28 @@
+{
+  "name": "@bacloud/cli",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Command-line client for Ballistica cloud, built on @bacloud/sdk.",
+  "license": "MIT",
+  "author": "aryan02420",
+  "bin": {
+    "bacloud-ts": "./dist/bin.mjs"
+  },
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "scripts": {
+    "build": "vp pack",
+    "test": "vp test",
+    "check": "vp check"
+  },
+  "dependencies": {
+    "@bacloud/sdk": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
+    "vite-plus": "catalog:"
+  }
+}
