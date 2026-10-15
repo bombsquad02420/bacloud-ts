@@ -1,6 +1,6 @@
 # VS Code extension: design (v1, read-only)
 
-Status: draft for review · 2026-10-15
+Status: decided (option B on desktop) · 2026-10-15
 
 ## Goal
 
@@ -33,7 +33,7 @@ extension (Node, desktop only)
 ├─ cloud       one BacloudClient per operation (connect → run → close)
 ├─ mirror      MirrorStore: globalStorageUri/mirrors/<fleet>/<workspace>/
 │                runs `workspace get <dir> --workspace <name>` into it
-├─ fs          BacloudFileSystem: scheme `bacloud`, isReadonly, serves the mirror
+├─ readonly    writes the mirror's .vscode/settings.json (files.readonlyInclude)
 └─ ui          Workspaces tree, status bar item, commands
 ```
 
@@ -45,7 +45,9 @@ extension (Node, desktop only)
 - Read-only means the mirror never has local edits, so a re-sync is always safe.
 - Sync triggers: on open, on the **Refresh** command, and optionally on window focus with a cooldown (setting, default off).
 
-### File system provider
+### File system provider (option A, not used on desktop)
+
+The spike below ruled this out for desktop: no search and no language features in a custom scheme. It is kept here as the starting point for a possible browser build.
 
 - URI: `bacloud://<fleet>/<workspace>/<path>`. The authority carries the fleet (CodeSandbox does the same, parsing identity back from the URI on activation).
 - `stat` / `readDirectory` / `readFile` read straight from the mirror, mapping ENOENT to `FileSystemError.FileNotFound`.
@@ -56,27 +58,48 @@ extension (Node, desktop only)
 
 ### Opening a workspace
 
-The `bacloud.openWorkspace` command (from the tree or the palette) does `vscode.openFolder(bacloud://prod/<name>/)`, with a choice of current or new window.
+The `bacloud.openWorkspace` command (from the tree or the palette) syncs the mirror if needed, then does `vscode.openFolder(Uri.file(<mirror dir>))`, with a choice of current or new window.
 
-## Decision needed: what the opened folder _is_
+## Decision: what the opened folder _is_ → B on desktop
 
-|                                 | A. `bacloud://` virtual folder (above)          | B. Open the mirror as a normal `file://` folder                                       |
-| ------------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------- |
-| Read-only                       | Enforced by the provider, with a reason shown   | Workspace setting `files.readonlyInclude: {"**": true}` (users can override per file) |
-| Search / Quick Open             | **Unknown**: proposed API only; needs the spike | Works                                                                                 |
-| Language features (Python etc.) | Limited                                         | Full                                                                                  |
-| Feels like a cloud workspace    | Yes (remote indicator, scheme)                  | No: it's a folder in app storage                                                      |
-| Future Push                     | Same mirror; add a command                      | Same mirror; add a command                                                            |
+|                                 | A. `bacloud://` virtual folder (above)        | B. Open the mirror as a normal `file://` folder                                       |
+| ------------------------------- | --------------------------------------------- | ------------------------------------------------------------------------------------- |
+| Read-only                       | Enforced by the provider, with a reason shown | Workspace setting `files.readonlyInclude: {"**": true}` (users can override per file) |
+| Search / Quick Open             | **None** (spike, below)                       | Works                                                                                 |
+| Language features (Python etc.) | **None** (spike: no hover / Go to Definition) | Full                                                                                  |
+| Feels like a cloud workspace    | Yes (remote indicator, scheme)                | No: it's a folder in app storage                                                      |
+| Future Push                     | Same mirror; add a command                    | Same mirror; add a command                                                            |
 
-**Recommendation:** build A, because it's what this project set out to do. First run a one-hour **spike**: register a read-only provider over a fixed folder and check whether Quick Open, Find in Files and Python IntelliSense work. If search is dead, switch to B. Everything except the provider is shared, so switching costs about a day.
+**Spike result (2026-10-15, VS Code 1.138, Pylance installed).** A throwaway read-only provider serving a local folder:
+
+| Check                                                | A (`bacloud-spike:/`)                                                                 |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| Open folder, Explorer, open files, language detected | ✅                                                                                    |
+| Edits refused with the read-only reason              | ✅                                                                                    |
+| `workspace.findFiles` / Quick Open (Cmd+P)           | ❌ hangs: log says "No search provider registered for scheme: bacloud-spike, waiting" |
+| Find in Files (Cmd+Shift+F)                          | ❌ nothing found                                                                      |
+| Python hover / Go to Definition                      | ❌                                                                                    |
+
+VS Code has no fallback search for custom schemes, and language servers ignore them. A read-only folder you can't search or navigate defeats the purpose.
+
+**Decision: B on desktop.** Open the mirror as a `file://` folder with read-only workspace settings. Keep the mirror and sync engine independent of presentation so a browser build could later add an A-style provider over browser storage (blocked anyway on WebSocket auth headers and CORS; see "Browser support" below).
+
+Consequences of B:
+
+- The opened folder is the mirror dir. Write a `.vscode/settings.json` there with `files.readonlyInclude: {"**": true}` and `files.readonlyExclude` empty, plus `files.exclude` for `.bacloudstate.json` and `.vscode`. Sync must not upload or delete these local-only files.
+- Recognise "this window is a bacloud mirror" by the folder living under `globalStorageUri/mirrors/<fleet>/<name>/` (gives the fleet and workspace name back). That drives the status bar and the Refresh/Push commands.
+- No `resourceLabelFormatters` (only for custom schemes). The window title can use the workspace name via the `window.title` setting in the mirror's settings.
+
+### Browser support (not planned)
+
+Option B needs a real disk, so a browser build would need an A-style provider over in-memory or IndexedDB storage (the SDK's `FileHost` allows it). It is also blocked by things outside this extension: browsers can't set `Authorization`/`X-WS-Token` on WebSockets, and signed GCS / one-shot-upload requests need CORS.
 
 ## UI (patterns borrowed from CodeSandbox)
 
 - Activity-bar container **Ballistica Cloud** with:
   - a **Sign In** view (`when: !bacloud.signedIn`) using `viewsWelcome` and a `command:bacloud.signIn` link;
   - a **Workspaces** tree (`when: bacloud.signedIn`) with one item per workspace (name; type and size as description), `contextValue = workspace`, inline actions **Open** and **Open in New Window** filtered by `viewItem == workspace`, and a title-bar **Refresh**.
-- Status bar item, only inside a `bacloud` window: `☁ <workspace>` with last-sync time; click to Refresh, spinner while syncing.
-- `resourceLabelFormatters` for scheme `bacloud` with `workspaceSuffix: "Ballistica"` (as RemoteHub does for GitHub), so tabs and the title read naturally.
+- Status bar item, only in a mirror window: `☁ <workspace>` with last-sync time; click to Refresh, spinner while syncing.
 - Commands: `signIn`, `signOut`, `refreshWorkspaces`, `openWorkspace`, `syncWorkspace`, `showLog`.
 - Server output (messages, progress) goes to a **Ballistica Cloud** output channel. `BACLOUD_VERBOSE`-style session logs only when the `bacloud.trace` setting is on.
 
@@ -100,10 +123,10 @@ The `bacloud.openWorkspace` command (from the tree or the palette) does `vscode.
 
 ## Plan
 
-1. Spike: read-only provider over a fixed folder; test search, Quick Open and Python. Decide A or B.
+1. ~~Spike~~ done: B chosen.
 2. Scaffold `apps/vscode`, plus the build and launch config (Extension Development Host).
 3. Auth: SecretStorage sign-in and sign-out.
 4. Workspaces tree with the list parser.
-5. Mirror and sync, plus the provider (or B), plus Open.
+5. Mirror and sync, read-only settings, and Open.
 6. Status bar, Refresh, output channel.
 7. Later: the Push command, which is `workspace put` on the mirror with the existing collision guard and a diff view of local and cloud changes.
