@@ -1,0 +1,136 @@
+{
+  "name": "bacloud-vscode",
+  "displayName": "Ballistica Cloud",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Clone and pull Ballistica cloud workspaces.",
+  "categories": [
+    "Other"
+  ],
+  "license": "MIT",
+  "publisher": "aryan02420",
+  "type": "module",
+  "main": "./dist/extension.cjs",
+  "scripts": {
+    "build": "vp pack",
+    "test": "vp test",
+    "check": "vp check"
+  },
+  "devDependencies": {
+    "@bacloud/sdk": "workspace:*",
+    "@types/node": "catalog:",
+    "@types/vscode": "~1.105.0",
+    "typescript": "catalog:",
+    "vite-plus": "catalog:"
+  },
+  "contributes": {
+    "viewsContainers": {
+      "panel": [
+        {
+          "id": "ballistica",
+          "title": "Ballistica",
+          "icon": "media/cloud.svg"
+        }
+      ]
+    },
+    "views": {
+      "ballistica": [
+        {
+          "id": "bacloud.workspaces",
+          "name": "Cloud Workspaces"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "bacloud.workspaces",
+        "contents": "Sign in to Ballistica to see your cloud workspaces.\n[Sign in](command:bacloud.signIn)",
+        "when": "!bacloud.signedIn"
+      }
+    ],
+    "commands": [
+      {
+        "command": "bacloud.signIn",
+        "title": "Sign In",
+        "category": "Ballistica"
+      },
+      {
+        "command": "bacloud.signOut",
+        "title": "Sign Out",
+        "category": "Ballistica",
+        "icon": "$(sign-out)"
+      },
+      {
+        "command": "bacloud.refreshWorkspaces",
+        "title": "Refresh Cloud Workspaces",
+        "category": "Ballistica",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "bacloud.showLog",
+        "title": "Show Log",
+        "category": "Ballistica"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "bacloud.refreshWorkspaces",
+          "when": "view == bacloud.workspaces && bacloud.signedIn",
+          "group": "navigation"
+        },
+        {
+          "command": "bacloud.signOut",
+          "when": "view == bacloud.workspaces && bacloud.signedIn",
+          "group": "navigation@9"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "bacloud.signOut",
+          "when": "bacloud.signedIn"
+        },
+        {
+          "command": "bacloud.refreshWorkspaces",
+          "when": "bacloud.signedIn"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Ballistica Cloud",
+      "properties": {
+        "bacloud.fleet": {
+          "type": "string",
+          "enum": [
+            "prod",
+            "test",
+            "dev"
+          ],
+          "default": "prod",
+          "description": "Which Ballistica cloud fleet to use."
+        },
+        "bacloud.trace": {
+          "type": "boolean",
+          "default": false,
+          "description": "Log session diagnostics to the Ballistica output channel."
+        }
+      }
+    }
+  },
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "extensionKind": [
+    "workspace"
+  ],
+  "engines": {
+    "vscode": "^1.105.0"
+  },
+  "capabilities": {
+    "virtualWorkspaces": false,
+    "untrustedWorkspaces": {
+      "supported": "limited",
+      "description": "Pulling writes files, so it is only available in trusted folders."
+    }
+  }
+}
