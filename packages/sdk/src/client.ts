@@ -111,6 +111,21 @@ export interface RunResult {
 
 type Call = [string, Record<string, unknown>];
 
+/**
+ * Per-checkout file recording the snapshot id we last synced to. A
+ * dotfile, so workspace syncs ignore it.
+ */
+export const WORKSPACE_STATE_FILENAME = ".bacloudstate.json";
+
+interface WorkspaceGuard {
+  /** Args to actually send. */
+  args: string[];
+  /** Absolute local workspace dir. */
+  dir: string;
+  /** Explicit `--workspace` name, if given. */
+  name: string | undefined;
+}
+
 export class BacloudClient {
   private readonly options: ClientOptions;
   private readonly server: string;
@@ -146,7 +161,9 @@ export class BacloudClient {
   }
 
   /** Run one user command (argv, without the `bacloud` itself). */
-  async run(args: string[], options: RunOptions): Promise<RunResult> {
+  async run(argv: string[], options: RunOptions): Promise<RunResult> {
+    const guard = await this.prepareWorkspaceGuard(argv, options.cwd);
+    const args = guard?.args ?? argv;
     const idempotent = isIdempotentCommand(args);
     const result: RunResult = { returnCode: 0, rawResults: [] };
     let next: Call | undefined = [
@@ -206,7 +223,77 @@ export class BacloudClient {
       }
       if (response.returnCode !== undefined) result.returnCode = response.returnCode;
     }
+    if (guard && result.workspaceSnapshotId !== undefined) {
+      await this.saveWorkspaceState(guard, result.workspaceSnapshotId);
+    }
     return result;
+  }
+
+  /**
+   * Optimistic-concurrency setup for `workspace get`/`put`.
+   *
+   * A get records the workspace's snapshot id in the target dir's
+   * {@link WORKSPACE_STATE_FILENAME}; a put sends it back as
+   * `--expected-snapshotid` so the server refuses to overwrite a
+   * workspace that changed since. The client-only `--force` flag skips
+   * that check.
+   */
+  private async prepareWorkspaceGuard(
+    args: string[],
+    cwd: string,
+  ): Promise<WorkspaceGuard | undefined> {
+    if (args[0] !== "workspace" || (args[1] !== "get" && args[1] !== "put")) return undefined;
+
+    // The target dir is the lone positional after the subcommand
+    // (default '.'); --workspace takes a value, other --flags don't.
+    let name: string | undefined;
+    const positionals: string[] = [];
+    const rest = args.slice(2);
+    for (let i = 0; i < rest.length; i++) {
+      const token = rest[i]!;
+      if (token === "--workspace") name = rest[++i];
+      else if (!token.startsWith("--")) positionals.push(token);
+    }
+    const dir = resolvePath(cwd, positionals[0] ?? ".");
+    if (args[1] === "get") return { args, dir, name };
+
+    if (args.includes("--force")) {
+      this.options.host.stderr(
+        "WARNING: --force skips the changed-since-last-get check.\n" +
+          "Your local copy wins outright; nothing is merged. A stale local workspace.json " +
+          "will overwrite server-maintained state in it (translation up-to-date stamps, " +
+          "wrap params, caches), which can silently restale every string in the package.\n",
+      );
+      return { args: args.filter((a) => a !== "--force"), dir, name };
+    }
+    const snapshotId = await this.readWorkspaceState(dir);
+    const guarded =
+      snapshotId === undefined ? args : [...args, "--expected-snapshotid", snapshotId];
+    return { args: guarded, dir, name };
+  }
+
+  private async readWorkspaceState(dir: string): Promise<string | undefined> {
+    try {
+      const data = await this.options.host.fs.readFile(joinPath(dir, WORKSPACE_STATE_FILENAME));
+      const parsed = JSON.parse(new TextDecoder().decode(data)) as { snapshotid?: unknown };
+      return typeof parsed.snapshotid === "string" ? parsed.snapshotid : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  private async saveWorkspaceState(guard: WorkspaceGuard, snapshotId: string): Promise<void> {
+    const state: Record<string, string> = { snapshotid: snapshotId };
+    if (guard.name !== undefined) state["name"] = guard.name;
+    try {
+      await this.options.host.fs.writeFile(
+        joinPath(guard.dir, WORKSPACE_STATE_FILENAME),
+        new TextEncoder().encode(JSON.stringify(state)),
+      );
+    } catch (err) {
+      // Non-fatal: the sync succeeded; a later put just skips the check.
+      this.options.log?.(`could not save workspace state: ${String(err)}`);
+    }
   }
 
   // ---------------------------------------------------------------- //
@@ -422,6 +509,18 @@ export function uploadPlanSibling(finalizeCommand: string, sibling: string): str
     throw new BacloudError(`Could not locate admin segment in command path '${finalizeCommand}'.`);
   }
   return [...parts.slice(0, index + 1), sibling].join(".");
+}
+
+function resolvePath(cwd: string, target: string): string {
+  if (target.startsWith("/") || /^[A-Za-z]:[\\/]/.test(target)) return target;
+  const parts = joinPath(cwd, target).split("/");
+  const out: string[] = [];
+  for (const part of parts) {
+    if (part === "." || (part === "" && out.length > 0)) continue;
+    if (part === ".." && out.length > 1) out.pop();
+    else out.push(part);
+  }
+  return out.join("/") || "/";
 }
 
 function joinPath(dir: string, name: string): string {

@@ -139,7 +139,12 @@ describe("BacloudClient.run", () => {
     });
     expect(requests[0]!["i"]).toBe(true); // workspace get is idempotent
 
-    expect((await readdir(dir)).sort()).toEqual(["big.bin", "keep.txt", "sub"]);
+    expect((await readdir(dir)).sort()).toEqual([
+      ".bacloudstate.json",
+      "big.bin",
+      "keep.txt",
+      "sub",
+    ]);
     expect(await readFile(join(dir, "sub", "new.txt"), "utf8")).toBe("hello");
     expect(await readFile(join(dir, "big.bin"), "utf8")).toBe("from gcs");
     expect(result.workspaceSnapshotId).toBe("snap-42");
@@ -174,4 +179,65 @@ test("upload plan sibling commands live under admin", () => {
     "admin._upload_plan_prepare",
   );
   expect(() => uploadPlanSibling("foo.bar", "x")).toThrow(/admin/);
+});
+
+describe("workspace collision guard", () => {
+  test("get saves the snapshot id; put sends it back", async () => {
+    const root = await mkdtemp(join(tmpdir(), "bacloud-"));
+    const dir = join(root, "WS");
+    await mkdir(dir);
+    const { host } = testHost();
+    const { client, leg } = await connect(host);
+    const serving = serve(leg, [() => ({ wss: "snap-1" }), () => ({ wss: "snap-2" })]);
+
+    await client.run(["workspace", "get", "WS", "--workspace", "Named"], { cwd: root });
+    expect(JSON.parse(await readFile(join(dir, ".bacloudstate.json"), "utf8"))).toEqual({
+      snapshotid: "snap-1",
+      name: "Named",
+    });
+
+    await client.run(["workspace", "put", "./WS/"], { cwd: root });
+    const requests = await serving;
+    expect((requests[1]!["p"] as { a: string[] }).a).toEqual([
+      "workspace",
+      "put",
+      "./WS/",
+      "--expected-snapshotid",
+      "snap-1",
+    ]);
+    expect(JSON.parse(await readFile(join(dir, ".bacloudstate.json"), "utf8"))).toEqual({
+      snapshotid: "snap-2",
+    });
+    await client.close();
+  });
+
+  test("put without state sends no expectation; --force is stripped with a warning", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "bacloud-"));
+    await writeFile(join(dir, ".bacloudstate.json"), JSON.stringify({ snapshotid: "old" }));
+    const fresh = await mkdtemp(join(tmpdir(), "bacloud-"));
+    const { host, err } = testHost();
+    const { client, leg } = await connect(host);
+    const serving = serve(leg, [() => ({}), () => ({})]);
+
+    await client.run(["workspace", "put"], { cwd: fresh });
+    await client.run(["workspace", "put", "--force"], { cwd: dir });
+    const requests = await serving;
+    expect((requests[0]!["p"] as { a: string[] }).a).toEqual(["workspace", "put"]);
+    expect((requests[1]!["p"] as { a: string[] }).a).toEqual(["workspace", "put"]);
+    expect(err.join("")).toMatch(/--force skips/);
+    await client.close();
+  });
+
+  test("other commands are untouched", async () => {
+    const { host } = testHost();
+    const { client, leg } = await connect(host);
+    const serving = serve(leg, [() => ({ wss: "x" })]);
+    await client.run(["workspace", "list", "--force"], { cwd: "/nonexistent" });
+    expect(((await serving)[0]!["p"] as { a: string[] }).a).toEqual([
+      "workspace",
+      "list",
+      "--force",
+    ]);
+    await client.close();
+  });
 });

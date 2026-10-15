@@ -29,4 +29,6 @@ try {
 | `client.ts`               | `bacommontools/bacloud.py`        | `_interactive` / `end_command` loop, transfers |
 | `host.ts`, `node.ts`      | —                                 | pluggable file + terminal side effects         |
 
+The client also applies the `workspace get`/`put` collision guard: a get records the snapshot id in `.bacloudstate.json`, a put sends it as `--expected-snapshotid`, and `--force` skips the check.
+
 Not yet implemented: CAS asset delivery (`assetpackage _assemble`), token refresh.
