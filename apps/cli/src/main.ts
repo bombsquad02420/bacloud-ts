@@ -26,6 +26,7 @@ import {
   type BacloudHost,
   type Fleet,
 } from "@bacloud/sdk";
+import packageJson from "../package.json" with { type: "json" };
 import { resolvePaths } from "./paths.ts";
 import { AuthStore, loadConfig } from "./store.ts";
 
@@ -72,6 +73,7 @@ export async function main(options: MainOptions): Promise<number> {
     const client = await connect({
       host,
       fleet,
+      client: `bacloud-ts-cli/${packageJson.version}`,
       server: env["BACLOUD_SERVER"] || config.server,
       bearer,
       isatty: options.isatty ?? false,

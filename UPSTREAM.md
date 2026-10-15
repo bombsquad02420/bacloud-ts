@@ -79,3 +79,4 @@ Verified against prod on 2026-10-16; the server is the authority and may change:
 - A put fails as a whole if any synced file lacks one of the extensions in `ALLOWED_EXTENSIONS` (`changes.ts`).
 - `workspace list` only prints a formatted table; there is no machine-readable form.
 - `GET /api/v1/admin/workspace-size/<name>` returns the snapshot id but only accepts API keys.
+- Account sessions created by `signin` are all labelled **bacloud** with location **unknown**, whatever the User-Agent; the browser consent page also names "bacloud". Clients can't name themselves.

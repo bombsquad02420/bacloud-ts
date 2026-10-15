@@ -13,7 +13,8 @@ import { WorkspacesView, type WorkspaceNode } from "./workspacesView.ts";
 
 export function activate(context: vscode.ExtensionContext): void {
   const log = vscode.window.createOutputChannel("Ballistica", { log: true });
-  const cloud = new Cloud(log);
+  const version = (context.extension.packageJSON as { version: string }).version;
+  const cloud = new Cloud(log, `bacloud-vscode/${version}`);
   const auth = new Auth(context.secrets, cloud);
   const workspaces = new WorkspacesView(cloud, auth);
   const store = new FolderStore(context.globalStorageUri);

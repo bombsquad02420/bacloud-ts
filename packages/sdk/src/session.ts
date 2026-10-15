@@ -20,6 +20,7 @@
 
 import {
   BACLOUD_VERSION,
+  bacloudUserAgent,
   requestCodec,
   responseCodec,
   type Request,
@@ -48,6 +49,8 @@ export interface SessionOptions {
   /** API key or login token, sent as `Authorization: Bearer`. */
   bearer?: string;
   dialer?: Dialer;
+  /** Product token prepended to the User-Agent, e.g. `bacloud-ts-cli/1.0`. */
+  client?: string;
   /** Override the `wss://<server>/bacloudsession` URL (tests). */
   url?: string;
   log?: (message: string) => void;
@@ -152,7 +155,7 @@ export class BacloudSession {
 
   private async connect() {
     const headers: Record<string, string> = {
-      "User-Agent": `bacloud/${BACLOUD_VERSION}`,
+      "User-Agent": bacloudUserAgent(this.options.client),
       [VERSION_HEADER]: String(BACLOUD_VERSION),
     };
     if (this.options.bearer) headers["Authorization"] = `Bearer ${this.options.bearer}`;

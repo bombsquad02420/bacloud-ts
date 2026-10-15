@@ -13,6 +13,16 @@ import { decode, encode, multitype, type Schema } from "./codec.ts";
  */
 export const BACLOUD_VERSION = 29;
 
+/**
+ * User-Agent for bacloud requests. Upstream sends `bacloud/<version>`;
+ * a client may prefix its own product token (e.g. `bacloud-ts-cli/1.0`)
+ * so the server can tell clients apart. `bacloud/<version>` stays last.
+ */
+export function bacloudUserAgent(client?: string): string {
+  const base = `bacloud/${BACLOUD_VERSION}`;
+  return client ? `${client} ${base}` : base;
+}
+
 // ---------------------------------------------------------------- //
 // Requests.
 // ---------------------------------------------------------------- //

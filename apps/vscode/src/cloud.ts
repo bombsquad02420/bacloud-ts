@@ -36,9 +36,12 @@ export interface CommandOutput extends RunResult {
 
 export class Cloud {
   private readonly log: vscode.LogOutputChannel;
+  /** User-Agent product token, e.g. `bacloud-vscode/0.0.1`. */
+  private readonly client: string;
 
-  constructor(log: vscode.LogOutputChannel) {
+  constructor(log: vscode.LogOutputChannel, client: string) {
     this.log = log;
+    this.client = client;
   }
 
   async run(args: string[], options: RunOptions): Promise<CommandOutput> {
@@ -69,6 +72,7 @@ export class Cloud {
     const client = await BacloudClient.connect({
       host,
       fleet: currentFleet(),
+      client: this.client,
       bearer: options.bearer,
       onLoginChange: options.onLoginChange,
       log: trace ? (message) => this.log.debug(message) : undefined,

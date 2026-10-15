@@ -41,6 +41,7 @@ describe("BacloudSession", () => {
     expect(leg.options.headers["Authorization"]).toBe("Bearer bsac-key");
     expect(leg.options.headers["X-Bacloud-Version"]).toBe("29");
     expect(leg.options.headers["X-WS-Token"]).toBeUndefined();
+    expect(leg.options.headers["User-Agent"]).toBe("bacloud/29");
     leg.push({ type: "h" });
     await session.end();
   });
@@ -57,6 +58,21 @@ describe("BacloudSession", () => {
     expect(await answer).toEqual({ type: "s", endMessage: "done" });
     expect(output).toEqual(["working..."]);
     expect(session.channelId).toBe("chan-1");
+    await session.end();
+  });
+
+  test("a client name is prepended to the User-Agent", async () => {
+    const relay = fakeRelay();
+    const opening = BacloudSession.open({
+      server: "node.test",
+      client: "bacloud-ts-cli/1.2.3",
+      dialer: relay.dialer,
+    });
+    const leg = await relay.leg(0);
+    expect(leg.options.headers["User-Agent"]).toBe("bacloud-ts-cli/1.2.3 bacloud/29");
+    await leg.nextFrame("h");
+    leg.push({ type: "h" });
+    const session = await opening;
     await session.end();
   });
 

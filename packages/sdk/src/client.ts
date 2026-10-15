@@ -29,7 +29,7 @@ import {
   type StandardResponse,
   type UploadPlan,
   type UploadPlanFileInfo,
-  BACLOUD_VERSION,
+  bacloudUserAgent,
 } from "./protocol/bacloud.ts";
 import { BacloudSession } from "./session.ts";
 import {
@@ -102,6 +102,8 @@ export interface ClientOptions {
   /** Whether output goes to a terminal. */
   isatty?: boolean;
   dialer?: Dialer;
+  /** Product token prepended to the User-Agent, e.g. `bacloud-ts-cli/1.0`. */
+  client?: string;
   /** Concurrent signed downloads. */
   downloadWorkers?: number;
   log?: (message: string) => void;
@@ -153,6 +155,7 @@ export class BacloudClient {
       server,
       bearer: options.bearer,
       dialer: options.dialer,
+      client: options.client,
       log: options.log,
     });
     return new BacloudClient(options, server, session);
@@ -390,7 +393,7 @@ export class BacloudClient {
     for (const entry of entries) {
       const body = await this.options.host.fs.readFile(entry.path);
       const headers: Record<string, string> = {
-        "User-Agent": `bacloud/${BACLOUD_VERSION}`,
+        "User-Agent": bacloudUserAgent(this.options.client),
         "Content-Type": "application/octet-stream",
       };
       if (this.bearer) headers["Authorization"] = `Bearer ${this.bearer}`;
