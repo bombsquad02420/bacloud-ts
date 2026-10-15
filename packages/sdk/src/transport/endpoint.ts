@@ -6,6 +6,11 @@
  * and the reconnect loop that keeps the session alive across legs.
  *
  * Payloads are opaque strings here; typing happens one layer up.
+ *
+ * Upstream: `SmartSocketEndpoint` in `tools/efro/smartsocket.py`.
+ * Not ported: token refresh, the in-flight byte cap and back-pressure,
+ * relay-buffer-full cursor handling, the serve-failure counter and
+ * anomaly detection. See UPSTREAM.md.
  */
 
 import {

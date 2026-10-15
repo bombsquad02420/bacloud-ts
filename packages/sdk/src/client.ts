@@ -5,6 +5,13 @@
  * `_interactive` command, and every response says what to do next —
  * print, prompt, transfer files, or call `endCommand` — until a
  * response carries no follow-up.
+ *
+ * Upstream: `App` in `tools/bacommontools/bacloud.py` (also
+ * `_resolve_server`, `_IDEMPOTENT_COMMAND_PREFIXES`, `_upload_plan_sibling`).
+ * Differences: a corrupt `.bacloudstate.json` fails a put closed
+ * (upstream drops the guard); a recorded workspace name is sent as
+ * `--workspace`; CAS asset delivery is not ported; transfers are buffered
+ * in memory rather than streamed. See UPSTREAM.md.
  */
 
 import type { BacloudHost } from "./host.ts";

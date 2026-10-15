@@ -2,6 +2,9 @@
 import { nodeHost } from "@bacloud/sdk/node";
 import { main } from "./main.ts";
 
+// Upstream: `run_bacloud_main` in ballistica `tools/bacommontools/bacloud.py`.
+// Difference: a closed output pipe (EPIPE) exits quietly. See UPSTREAM.md.
+
 // Ctrl-C / SIGTERM: exit quietly, like the Python client.
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.on(signal, () => process.exit(2));

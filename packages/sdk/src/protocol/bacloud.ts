@@ -1,5 +1,8 @@
 /**
  * bacloud wire contract (mirror of ballistica `bacommon/bacloud.py`).
+ *
+ * Upstream: `tools/bacommon/bacloud.py`, plus `DirectoryManifest` from
+ * `tools/bacommon/transfer.py`. See UPSTREAM.md.
  */
 
 import { decode, encode, multitype, type Schema } from "./codec.ts";

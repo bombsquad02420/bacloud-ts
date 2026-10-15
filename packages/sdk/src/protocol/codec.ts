@@ -9,6 +9,8 @@
  *
  * Multitypes (`IOMultiType`) store their type id under `_t`; the
  * default member of a hierarchy is written without one.
+ *
+ * Upstream: `tools/efro/dataclassio` (JSON codec only). See UPSTREAM.md.
  */
 
 export type FieldKind =

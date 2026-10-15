@@ -12,6 +12,9 @@
  * Comparing both sides to the common base tells "the cloud changed
  * this" apart from "you changed this", which a plain two-way diff
  * can't.
+ *
+ * Upstream: none. `isLocalOnly` and `ALLOWED_EXTENSIONS` record server
+ * behaviour observed against prod, not upstream code. See UPSTREAM.md.
  */
 
 import type { FileHost } from "./host.ts";

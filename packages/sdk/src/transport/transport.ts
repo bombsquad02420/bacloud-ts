@@ -3,6 +3,10 @@
  *
  * Kept tiny so tests can drive the endpoint with a fake, and so hosts
  * with unusual WebSocket implementations can plug their own in.
+ *
+ * Upstream: `SmartSocketTransport` / `SmartSocketClosed` in
+ * `tools/efro/smartsocket.py` and `_WsTransport` in
+ * `tools/bacommontools/bacloudsession.py`. See UPSTREAM.md.
  */
 
 import { MAX_MESSAGE_BYTES } from "../protocol/smartsocket.ts";

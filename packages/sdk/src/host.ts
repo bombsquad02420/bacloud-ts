@@ -5,6 +5,8 @@
  * the cwd we report), so a host decides what those paths mean: the
  * Node host maps them to the real disk, while an editor host could map
  * them onto a virtual file system.
+ *
+ * Upstream: none; upstream calls `os` directly. See UPSTREAM.md.
  */
 
 import type { DirectoryManifest } from "./protocol/bacloud.ts";

@@ -3,6 +3,10 @@
  *
  * Login tokens are kept per fleet (a prod token means nothing to the
  * test fleet) in a file only the user can read.
+ *
+ * Upstream: `StateData`, `_load_state` and `_save_state` in
+ * `tools/bacommontools/bacloud.py` (one token there; one per fleet here).
+ * See UPSTREAM.md.
  */
 
 import { chmod, mkdir, readFile, rename, writeFile } from "node:fs/promises";

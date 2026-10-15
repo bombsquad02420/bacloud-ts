@@ -5,6 +5,9 @@
  * Every message is delivered gaplessly and in order, or the session
  * closes with a code. Frames travel as JSON text messages, one frame per
  * WebSocket message; there is no in-band close frame.
+ *
+ * Upstream: `tools/efro/smartsocket.py` (frames, policy, close codes,
+ * `action_for_close_code`). See UPSTREAM.md.
  */
 
 import { multitype } from "./codec.ts";

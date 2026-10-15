@@ -11,6 +11,12 @@
  * - `BACLOUD_SERVER`: explicit server host.
  * - `BACLOUD_VERBOSE=1`: session and node diagnostics on stderr.
  * - `BA_BUILD_NUMBER`: engine build reported to asset commands.
+ *
+ * Upstream: `run_bacloud_main`, `App.run` and `_resolve_api_key` in
+ * `tools/bacommontools/bacloud.py`. Differences: runs outside a ballistica
+ * project, reads the API key only from the environment, and keeps logins
+ * per fleet in XDG state instead of `<project>/.cache/bacloud/state`. See
+ * UPSTREAM.md.
  */
 
 import {

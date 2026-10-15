@@ -1,5 +1,10 @@
 /**
  * Node implementations of the bacloud host interfaces.
+ *
+ * Upstream: `DirectoryManifest.create_from_disk` in
+ * `tools/bacommon/transfer.py`, and the file handlers in
+ * `tools/bacommontools/bacloud.py` (`_handle_deletes`,
+ * `_handle_downloads_inline`, `_handle_dir_prune_empty`). See UPSTREAM.md.
  */
 
 import { createHash } from "node:crypto";

@@ -7,6 +7,9 @@
  *   login tokens belong here.
  *
  * Per the spec, a relative or empty value is invalid and ignored.
+ *
+ * Upstream: replaces the `.cache/bacloud/state` location in
+ * `tools/bacommontools/bacloud.py`. See UPSTREAM.md.
  */
 
 import { homedir } from "node:os";

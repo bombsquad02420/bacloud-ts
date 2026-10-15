@@ -1,6 +1,9 @@
 /**
  * Helpers for workspace commands whose server output is only meant
  * for humans.
+ *
+ * Upstream: none; parses the table the server prints for
+ * `workspace list`. See UPSTREAM.md.
  */
 
 export interface WorkspaceListing {

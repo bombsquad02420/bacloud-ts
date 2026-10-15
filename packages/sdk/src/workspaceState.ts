@@ -6,6 +6,11 @@
  * and keep keys they don't know. A file that exists but can't be read
  * is an error, never "no state": treating it as absent would silently
  * drop the put collision guard.
+ *
+ * Upstream: `_read_ws_state_snapshotid` and `_finish_workspace_command`
+ * in `tools/bacommontools/bacloud.py`. Differences: unreadable files are
+ * errors rather than "no state", and writes merge into the existing file
+ * (atomically) instead of rewriting it. See UPSTREAM.md.
  */
 
 import type { FileHost } from "./host.ts";

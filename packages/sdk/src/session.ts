@@ -10,6 +10,12 @@
  * Sequential by contract: send a request, read until its standard
  * response, repeat. Stream output and chunked responses are handled
  * here so callers only ever see complete answers.
+ *
+ * Upstream: `BacloudSession` in `tools/bacommontools/bacloudsession.py`.
+ * Differences: an async API instead of a session thread; `open()`
+ * rejects instead of returning `None`, and nothing retries it (upstream's
+ * `App` retries four times); no anomaly reports to the master. See
+ * UPSTREAM.md.
  */
 
 import {
