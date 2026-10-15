@@ -14,4 +14,8 @@ vp run -r test
 vp run -r build
 ```
 
-The SDK and CLI are ported from ballistica `5cd0916442fd` (v1.8.1, bacloud protocol 29). [UPSTREAM.md](UPSTREAM.md) maps each file to its upstream counterpart and lists every behaviour difference.
+The SDK and CLI are ported from [ballistica](https://github.com/efroemling/ballistica) `5cd0916442fd` (v1.8.1, bacloud protocol 29). [UPSTREAM.md](UPSTREAM.md) maps each file to its upstream counterpart and lists every behaviour difference.
+
+## License
+
+MIT; see [LICENSE](LICENSE). Code ported from ballistica keeps its MIT notice; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
