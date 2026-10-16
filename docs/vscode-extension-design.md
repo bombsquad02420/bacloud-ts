@@ -103,7 +103,7 @@ Settings: `bacloud.fleet` (default `prod`), `bacloud.pullOnOpen` (default off; w
 
 - Token in `context.secrets`, keyed by fleet. No plaintext file (unlike CodeSandbox and our CLI).
 - Sign-in runs `BacloudClient.run(["signin"])` with a host where `openUrl` → `env.openExternal`, `prompt` → `showInputBox` (`password: true` where asked), `onLoginChange` → secrets. A cancellable progress notification covers the server's polling.
-- Later: an `AuthenticationProvider` so the account shows in VS Code's Accounts menu.
+- Registered as the `ballistica` authentication provider, so the signed-in account shows (and can be signed out) in VS Code's Accounts menu. The account name comes from the server's sign-in or `status` output.
 
 ## SDK and CLI changes this needs
 

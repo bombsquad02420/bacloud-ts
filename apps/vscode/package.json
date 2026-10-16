@@ -273,7 +273,13 @@
           "description": "Log session diagnostics to the Ballistica output channel."
         }
       }
-    }
+    },
+    "authentication": [
+      {
+        "id": "ballistica",
+        "label": "Ballistica"
+      }
+    ]
   },
   "activationEvents": [
     "onStartupFinished"
