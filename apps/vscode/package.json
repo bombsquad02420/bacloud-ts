@@ -51,6 +51,11 @@
           "name": "Current Workspace"
         },
         {
+          "id": "bacloud.localChanges",
+          "name": "Local Changes",
+          "when": "bacloud.inCheckout"
+        },
+        {
           "id": "bacloud.changes",
           "name": "Incoming Changes",
           "when": "bacloud.pullStaged"
@@ -76,6 +81,11 @@
         "view": "bacloud.current",
         "contents": "No open folder is a Ballistica cloud workspace. Sign in to clone one.",
         "when": "!bacloud.signedIn && !bacloud.inCheckout"
+      },
+      {
+        "view": "bacloud.localChanges",
+        "contents": "No local changes since the last sync.",
+        "when": "!bacloud.hasLocalChanges"
       }
     ],
     "commands": [
@@ -188,6 +198,11 @@
           "command": "bacloud.discardPull",
           "when": "view == bacloud.changes",
           "group": "navigation@2"
+        },
+        {
+          "command": "bacloud.push",
+          "when": "view == bacloud.localChanges && bacloud.hasLocalChanges",
+          "group": "navigation@1"
         }
       ],
       "commandPalette": [

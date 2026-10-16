@@ -38,7 +38,7 @@ const COLORS = {
   deleted: "gitDecoration.deletedResourceForeground",
 } as const;
 
-class CheckoutScm implements vscode.Disposable {
+export class CheckoutScm implements vscode.Disposable {
   checkout: Checkout;
   private readonly store: FolderStore;
   private readonly sc: vscode.SourceControl;
@@ -48,10 +48,14 @@ class CheckoutScm implements vscode.Disposable {
   /** Base manifest, cached until the staging copy changes (a sync). */
   private base: Manifest | undefined;
   private baseKnown = false;
+  /** Local changes since the last sync, as last computed. */
+  changes: Change[] = [];
+  private readonly onChanged: () => void;
   private refreshing: Promise<void> | undefined;
   private again = false;
 
-  constructor(checkout: Checkout, store: FolderStore) {
+  constructor(checkout: Checkout, store: FolderStore, onChanged: () => void) {
+    this.onChanged = onChanged;
     this.checkout = checkout;
     this.store = store;
     this.sc = vscode.scm.createSourceControl(
@@ -72,11 +76,11 @@ class CheckoutScm implements vscode.Disposable {
     this.watcher.onDidDelete(changed);
   }
 
-  private get folder(): string {
+  get folder(): string {
     return this.checkout.folder.uri.fsPath;
   }
 
-  private get staging(): string {
+  get staging(): string {
     return this.store.stagingDir(this.folder);
   }
 
@@ -123,6 +127,8 @@ class CheckoutScm implements vscode.Disposable {
     if (!this.baseKnown) {
       this.group.resourceStates = [];
       this.sc.count = 0;
+      this.changes = [];
+      this.onChanged();
       return;
     }
     const local = await workspaceManifest(nodeFileHost, this.folder);
@@ -130,6 +136,8 @@ class CheckoutScm implements vscode.Disposable {
     const changes = classifyChanges(this.base, this.base, local);
     this.group.resourceStates = changes.map((change) => this.resourceState(change));
     this.sc.count = changes.length;
+    this.changes = changes;
+    this.onChanged();
   }
 
   private resourceState(change: Change): vscode.SourceControlResourceState {
@@ -175,6 +183,9 @@ class CheckoutScm implements vscode.Disposable {
 /** Keeps one provider per tracked checkout. */
 export class ScmProviders implements vscode.Disposable {
   private readonly providers = new Map<string, CheckoutScm>();
+  private readonly changed = new vscode.EventEmitter<void>();
+  /** Fires when any checkout's local changes were recomputed. */
+  readonly onDidChange = this.changed.event;
   private readonly subscriptions: vscode.Disposable[];
 
   constructor(tracker: CheckoutTracker, store: FolderStore) {
@@ -186,7 +197,7 @@ export class ScmProviders implements vscode.Disposable {
         const existing = this.providers.get(key);
         if (existing) existing.syncChanged(checkout);
         else {
-          const scm = new CheckoutScm(checkout, store);
+          const scm = new CheckoutScm(checkout, store, () => this.changed.fire());
           this.providers.set(key, scm);
           scm.scheduleRefresh(0);
         }
@@ -195,12 +206,18 @@ export class ScmProviders implements vscode.Disposable {
         if (!seen.has(key)) {
           scm.dispose();
           this.providers.delete(key);
+          this.changed.fire();
         }
       }
     };
     // The tracker rescans after every clone, pull and push.
-    this.subscriptions = [tracker.onDidChange(sync)];
+    this.subscriptions = [this.changed, tracker.onDidChange(sync)];
     sync();
+  }
+
+  /** Providers in workspace-folder order. */
+  get all(): CheckoutScm[] {
+    return [...this.providers.values()];
   }
 
   dispose(): void {

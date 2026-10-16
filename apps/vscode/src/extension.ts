@@ -13,6 +13,7 @@ import { CurrentWorkspaceView, type CurrentNode } from "./currentView.ts";
 import { Cloud } from "./cloud.ts";
 import { CheckoutTracker, FolderStore } from "./folders.ts";
 import { PullManager } from "./pull.ts";
+import { LocalChangesView } from "./localChangesView.ts";
 import { ScmProviders } from "./scm.ts";
 import { PushManager } from "./push.ts";
 import { CheckoutStatusBar } from "./statusBar.ts";
@@ -31,6 +32,8 @@ export function activate(context: vscode.ExtensionContext): void {
   const pushes = new PushManager({ cloud, auth, store, pulls, log, rescan });
   const changes = new ChangesView(pulls);
   const statusBar = new CheckoutStatusBar(tracker, pulls);
+  const scm = new ScmProviders(tracker, store);
+  const localChanges = new LocalChangesView(scm);
 
   /** Report command failures without dumping stack traces on users. */
   const command = <A extends unknown[]>(id: string, fn: (...args: A) => Promise<void> | void) =>
@@ -110,7 +113,9 @@ export function activate(context: vscode.ExtensionContext): void {
     pulls,
     changes,
     statusBar,
-    new ScmProviders(tracker, store),
+    scm,
+    localChanges,
+    vscode.window.registerTreeDataProvider("bacloud.localChanges", localChanges),
     vscode.window.registerTreeDataProvider(
       "bacloud.current",
       new CurrentWorkspaceView(tracker, pulls),
