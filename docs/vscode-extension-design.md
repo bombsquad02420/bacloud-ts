@@ -99,6 +99,16 @@ Commands: `signIn`, `signOut`, `refreshWorkspaces`, `clone`, `pull`, `applyAllIn
 
 Settings: `bacloud.fleet` (default `prod`), `bacloud.pullOnOpen` (default off; when on, runs steps 1–3 only and shows the count, never applies).
 
+## Source Control provider
+
+Each checkout is also a VS Code Source Control provider (`scmProvider == ballistica`), the standard way VS Code shows changes against a baseline (git, Perforce and GitHub Repositories all use it):
+
+- **Local Changes** group: files added, modified or deleted since the last sync (folder vs staging copy), with git-style icons and colours; click for a last-sync ↔ local diff. The SCM badge counts them.
+- **Quick diff**: `quickDiffProvider` serves the last-sync copy, so editors get change bars in the gutter and inline diffs. VS Code registers it as a _primary_ quick diff; in a folder that is also a git repo both providers' bars show (git's win where they overlap), and each can be toggled from the gutter's context menu (checked in VS Code 1.138's workbench source).
+- **Live**: a file watcher on the folder (debounced) and every clone / pull / push re-compute the list. The base manifest is cached until the next sync.
+- Pull and Push sit in the Source Control title bar. No commit message box.
+- Nothing is listed while the base is unknown (folder synced by another tool) until the next pull.
+
 ## Auth
 
 - Token in `context.secrets`, keyed by fleet. No plaintext file (unlike CodeSandbox and our CLI).

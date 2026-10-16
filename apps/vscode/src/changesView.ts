@@ -32,6 +32,7 @@ export async function openChangeDiff(
   staging: string,
   folder: string,
   change: Change,
+  title = `${change.path} (Cloud ↔ Local)`,
 ): Promise<void> {
   const local = vscode.Uri.file(join(folder, change.path));
   const cloud = vscode.Uri.from({ scheme: CLOUD_SCHEME, path: `/${change.path}`, query: staging });
@@ -41,7 +42,7 @@ export async function openChangeDiff(
     "vscode.diff",
     cloudExists ? cloud : missing,
     localExists ? local : missing,
-    `${change.path} (Cloud ↔ Local)`,
+    title,
     { preview: true },
   );
 }

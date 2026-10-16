@@ -160,6 +160,11 @@
         "title": "Merge in Merge Editor",
         "category": "Ballistica",
         "icon": "$(git-merge)"
+      },
+      {
+        "command": "bacloud.openLocalChange",
+        "title": "Compare with Last Sync",
+        "category": "Ballistica"
       }
     ],
     "menus": {
@@ -229,6 +234,10 @@
         {
           "command": "bacloud.mergeConflict",
           "when": "false"
+        },
+        {
+          "command": "bacloud.openLocalChange",
+          "when": "false"
         }
       ],
       "view/item/context": [
@@ -266,6 +275,18 @@
           "command": "bacloud.mergeConflict",
           "when": "view == bacloud.changes && viewItem == conflict-merge",
           "group": "inline@1"
+        }
+      ],
+      "scm/title": [
+        {
+          "command": "bacloud.pull",
+          "when": "scmProvider == ballistica",
+          "group": "navigation@1"
+        },
+        {
+          "command": "bacloud.push",
+          "when": "scmProvider == ballistica",
+          "group": "navigation@2"
         }
       ]
     },
