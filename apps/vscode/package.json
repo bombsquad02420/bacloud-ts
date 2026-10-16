@@ -7,19 +7,30 @@
   "categories": [
     "Other"
   ],
+  "homepage": "https://github.com/bombsquad02420/bacloud-ts/tree/main/apps/vscode#readme",
+  "bugs": {
+    "url": "https://github.com/bombsquad02420/bacloud-ts/issues"
+  },
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/bombsquad02420/bacloud-ts.git",
+    "directory": "apps/vscode"
+  },
   "publisher": "aryan02420",
   "type": "module",
   "main": "./dist/extension.cjs",
   "scripts": {
     "build": "vp pack",
     "test": "vp test",
-    "check": "vp check"
+    "check": "vp check",
+    "package": "vp run build && vsce package --no-dependencies --out bacloud-vscode.vsix"
   },
   "devDependencies": {
     "@bacloud/sdk": "workspace:*",
     "@types/node": "catalog:",
     "@types/vscode": "~1.105.0",
+    "@vscode/vsce": "^4.0.0",
     "typescript": "catalog:",
     "vite-plus": "catalog:"
   },

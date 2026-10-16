@@ -48,6 +48,13 @@ Open the repo in VS Code and press F5 (**Run Ballistica extension**). It builds 
 code --new-window --extensionDevelopmentPath="$PWD/apps/vscode"
 ```
 
+To build an installable `.vsix` and install it into your normal VS Code:
+
+```bash
+vp run --filter bacloud-vscode... package
+code --install-extension apps/vscode/bacloud-vscode.vsix
+```
+
 The design lives in [docs/vscode-extension-design.md](docs/vscode-extension-design.md).
 
 ## Keeping up with ballistica
