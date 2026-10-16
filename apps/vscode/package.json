@@ -139,7 +139,7 @@
       },
       {
         "command": "bacloud.keepLocal",
-        "title": "Keep Local Version",
+        "title": "Keep Local Version (Mark Resolved)",
         "category": "Ballistica",
         "icon": "$(check)"
       },
@@ -154,6 +154,12 @@
         "title": "Discard Pull",
         "category": "Ballistica",
         "icon": "$(discard)"
+      },
+      {
+        "command": "bacloud.mergeConflict",
+        "title": "Merge in Merge Editor",
+        "category": "Ballistica",
+        "icon": "$(git-merge)"
       }
     ],
     "menus": {
@@ -219,6 +225,10 @@
         {
           "command": "bacloud.push",
           "when": "bacloud.inCheckout && bacloud.signedIn"
+        },
+        {
+          "command": "bacloud.mergeConflict",
+          "when": "false"
         }
       ],
       "view/item/context": [
@@ -234,13 +244,13 @@
         },
         {
           "command": "bacloud.takeCloud",
-          "when": "view == bacloud.changes && viewItem =~ /^(incoming|conflict)$/",
-          "group": "inline@1"
+          "when": "view == bacloud.changes && viewItem =~ /^(incoming|conflict)/",
+          "group": "inline@2"
         },
         {
           "command": "bacloud.keepLocal",
-          "when": "view == bacloud.changes && viewItem == conflict",
-          "group": "inline@2"
+          "when": "view == bacloud.changes && viewItem =~ /^conflict/",
+          "group": "inline@3"
         },
         {
           "command": "bacloud.pull",
@@ -251,6 +261,11 @@
           "command": "bacloud.push",
           "when": "view == bacloud.current && viewItem == checkout",
           "group": "inline"
+        },
+        {
+          "command": "bacloud.mergeConflict",
+          "when": "view == bacloud.changes && viewItem == conflict-merge",
+          "group": "inline@1"
         }
       ]
     },

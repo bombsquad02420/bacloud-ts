@@ -112,6 +112,10 @@ export function activate(context: vscode.ExtensionContext): void {
       node?.type === "change" ? changes.open(node.change) : undefined,
     ),
     command("bacloud.takeCloud", (node?: ChangeNode) => pulls.takeCloud(changePath(node))),
+    command("bacloud.mergeConflict", (node?: ChangeNode) => {
+      if (node?.type !== "change") throw new Error("Pick a conflict in Incoming Changes.");
+      return pulls.merge(node.change);
+    }),
     command("bacloud.keepLocal", (node?: ChangeNode) => pulls.keepLocal(changePath(node))),
     command("bacloud.applyAllIncoming", () => pulls.applyAllIncoming()),
     command("bacloud.discardPull", () => pulls.discard()),

@@ -16,8 +16,8 @@
  * unresolved, so a push stays guarded until then.
  */
 
-import { rm } from "node:fs/promises";
-import { join } from "node:path";
+import { copyFile, mkdir, rm } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import * as vscode from "vscode";
 import {
   classifyChanges,
@@ -31,6 +31,7 @@ import type { Auth } from "./auth.ts";
 import { currentFleet, type Cloud } from "./cloud.ts";
 import { hasKnownBase, type Checkout, type FolderStore } from "./folders.ts";
 import { exists, linkTree, replaceDir } from "./fsutil.ts";
+import { CLOUD_SCHEME, mergeable, openChangeDiff } from "./changesView.ts";
 
 /** A pull waiting for review. */
 export interface StagedPull {
@@ -44,6 +45,11 @@ export interface StagedPull {
   changes: Change[];
   /** Paths the user has applied or kept. */
   resolved: Set<string>;
+}
+
+/** Snapshots of local files taken for the merge editor. */
+function mergeDir(pull: StagedPull): string {
+  return join(dirname(pull.staging), "merge-local");
 }
 
 export function needsAction(change: Change): boolean {
@@ -219,6 +225,61 @@ export class PullManager implements vscode.Disposable {
     await this.resolve(path);
   }
 
+  /**
+   * Open VS Code's 3-way merge editor: base (last sync), cloud and a
+   * snapshot of the local file, writing the result into the local file.
+   * The user marks the conflict resolved afterwards (Keep Local).
+   */
+  async merge(change: Change): Promise<void> {
+    const pull = this.require();
+    if (!mergeable(change)) throw new Error(`${change.path} can't be merged: one side deleted it.`);
+    const folder = pull.checkout.folder.uri.fsPath;
+    const output = vscode.Uri.file(join(folder, change.path));
+    // The merge writes into the local file, so the "local" input must be
+    // a snapshot taken before it starts.
+    const snapshot = join(mergeDir(pull), change.path);
+    await mkdir(dirname(snapshot), { recursive: true });
+    await copyFile(output.fsPath, snapshot);
+
+    // The fragment keeps cached documents from an earlier pull out.
+    const side = (root: string | undefined) =>
+      vscode.Uri.from({
+        scheme: CLOUD_SCHEME,
+        path: `/${change.path}`,
+        query: root ?? "",
+        fragment: pull.snapshotId,
+      });
+    const hasBase =
+      pull.baseKnown && change.kind === "conflict" && change.reason === "both-modified";
+    try {
+      await vscode.commands.executeCommand("_open.mergeEditor", {
+        base: side(hasBase ? pull.base : undefined),
+        input1: {
+          uri: side(pull.staging),
+          title: "Cloud",
+          description: pull.checkout.name,
+          detail: "incoming",
+        },
+        input2: {
+          uri: side(mergeDir(pull)),
+          title: "Local",
+          description: "your version",
+          detail: "current",
+        },
+        output,
+      });
+    } catch (err) {
+      // The merge editor is reached through an internal command; fall
+      // back to a plain diff if this VS Code doesn't have it.
+      this.log.warn(`Merge editor unavailable (${String(err)}); showing a diff instead.`);
+      await openChangeDiff(pull.staging, folder, change);
+      return;
+    }
+    void vscode.window.showInformationMessage(
+      `Merge ${change.path}, save it, then click "Keep Local" in Incoming Changes to mark it resolved.`,
+    );
+  }
+
   async keepLocal(path: string): Promise<void> {
     await this.resolve(path);
   }
@@ -235,6 +296,7 @@ export class PullManager implements vscode.Disposable {
     const pull = this.require();
     if (pull.baseKnown) await replaceDir(pull.base, pull.staging);
     else await rm(pull.staging, { recursive: true, force: true });
+    await rm(mergeDir(pull), { recursive: true, force: true });
     this.current = undefined;
     this.changed.fire();
   }
@@ -264,6 +326,7 @@ export class PullManager implements vscode.Disposable {
       syncedAt: new Date().toISOString(),
     });
     await rm(pull.base, { recursive: true, force: true });
+    await rm(mergeDir(pull), { recursive: true, force: true });
     this.current = undefined;
     await this.rescan();
     this.changed.fire();

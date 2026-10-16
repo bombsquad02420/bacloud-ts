@@ -68,6 +68,14 @@ const REASONS: Record<ConflictReason, string> = {
   "deleted-in-cloud": "changed locally, deleted in cloud",
 };
 
+/** Conflicts where both sides have the file, so a 3-way merge applies. */
+export function mergeable(change: Change): boolean {
+  return (
+    change.kind === "conflict" &&
+    (change.reason === "both-modified" || change.reason === "both-added")
+  );
+}
+
 /** Which sides of a change have the file. */
 export function sides(change: Change): { cloud: boolean; local: boolean } {
   switch (change.kind) {
@@ -140,7 +148,8 @@ export class ChangesView implements vscode.TreeDataProvider<ChangeNode>, vscode.
         "warning",
         new vscode.ThemeColor("list.warningForeground"),
       );
-      item.contextValue = "conflict";
+      // Both sides have the file: it can be merged line by line.
+      item.contextValue = mergeable(change) ? "conflict-merge" : "conflict";
     } else {
       item.description = change.edit;
       item.iconPath = new vscode.ThemeIcon(EDIT_ICONS[change.edit]);
