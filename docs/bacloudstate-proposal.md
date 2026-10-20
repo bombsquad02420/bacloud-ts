@@ -81,7 +81,7 @@ Client-side checks protect only clients that implement them. With small server a
 
 - Return `account` and `workspaceid` with get/put results (for example alongside `workspace_snapshotid` in `StandardResponseData`).
 - Accept `--expected-workspaceid` and `--expected-account` on get and put, and refuse mismatches the same way `--expected-snapshotid` works today.
-- A cheap status call usable with a login token, returning the current `snapshotid` for a workspace. Today `GET /api/v1/admin/workspace-size/<name>` does this but only accepts API keys (login tokens get `401 Invalid API key`).
+- A cheap status call usable with a login token, returning the current `snapshotid` for a workspace (see _No way to read the cloud snapshot id_ below).
 
 ## Rollout
 
@@ -90,6 +90,31 @@ Client-side checks protect only clients that implement them. With small server a
 3. **Server-backed fields:** `account`, `workspaceid`, the expected-* flags and the status call.
 
 Until step 1 lands upstream, the Python client will strip new keys on its next write. `bacloud-ts` must therefore treat every new field as optional, and the VS Code extension keeps its own per-folder record (see [vscode-extension-design.md](vscode-extension-design.md)).
+
+## Other API gaps found while building clients
+
+### No way to read the cloud snapshot id
+
+A client can't ask "what snapshot is the cloud workspace at now?" without downloading it. `get` reports the id only after syncing, and `workspace list` prints a table without ids.
+
+- `GET /api/v1/admin/workspace-size/<name>` returns `snapshot_id`, but only accepts API keys; login tokens get `401 Invalid API key` (tested 2026-10-16). Most users only have a login token from `signin`.
+- **Effect:** a client can't show "your checkout is out of date" or warn before a push that will be refused. `pcommand assetworkspace` works around it with the API-key endpoint, and the `bacloud-ts` VS Code extension fetches the whole workspace into a staging copy just to find out.
+- **Ask:** a read-only call that accepts login tokens, e.g. `workspace status <name>` returning `{snapshotid, modified}`. Or include the snapshot id in `workspace list` output (ideally in a machine-readable form, which `workspace list` also lacks).
+
+### Browsers can't use the bacloud API
+
+Since protocol 26, bacloud only works over a WebSocket session (`wss://<node>/bacloudsession`); the HTTP request-per-call fallback was removed. That session requires headers browsers can't set on a WebSocket:
+
+- `Authorization: Bearer <token>`: the browser `WebSocket` API has no way to add headers.
+- `X-WS-Token` on reconnects, and `X-Bacloud-Version`.
+
+So browser-based clients (vscode.dev / github.dev, a web UI, any extension running in a browser worker) can't talk to bacloud at all. File transfers have a second, smaller problem: signed GCS URLs, `/bacloud_oneshot_upload` and `/casblob` would also need CORS headers for browser origins. Not tested.
+
+Possible fixes, smallest first:
+
+1. **Credentials in the handshake without custom headers.** Accept the bearer and resume token as a WebSocket subprotocol value (`Sec-WebSocket-Protocol: basmartsocket, bearer.<token>`), which browsers can set. Or a short-lived single-use ticket minted by a REST call and passed in the URL query. A ticket is better than a raw token in the URL, which can leak into logs. Send the version as a subprotocol or query parameter.
+2. **A REST alternative** for clients that can't hold a session: `POST` one command, get one `StandardResponseData` back, with CORS. This is roughly the pre-v26 request-per-connection path, so the server logic exists. Streamed output could degrade to polling.
+3. **CORS** on the storage and node endpoints browsers would fetch.
 
 ## Also worth considering
 
