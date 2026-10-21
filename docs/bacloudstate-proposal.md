@@ -116,6 +116,13 @@ Possible fixes, smallest first:
 2. **A REST alternative** for clients that can't hold a session: `POST` one command, get one `StandardResponseData` back, with CORS. This is roughly the pre-v26 request-per-connection path, so the server logic exists. Streamed output could degrade to polling.
 3. **CORS** on the storage and node endpoints browsers would fetch.
 
+### No documented way to preview in the game
+
+The web UI can send a workspace to a running game for a live preview, but the API behind it isn't documented. So tools that build assets outside the browser (the `ballistica-cloud-tools` Blender addon, the CLI, the VS Code extension) can't offer "see it in game". Their users have to push, switch to the web UI, and trigger the preview there.
+
+- **Effect:** the slowest step in the edit → look → fix loop is a context switch. That hurts most for new modders, who are the addon's target audience.
+- **Ask:** document the preview call(s), or expose them as a bacloud command, e.g. `workspace preview <name>`. It would need to target a device or session, and report back once the game has loaded the assets.
+
 ## Also worth considering
 
 - **An ignore file (`.bacloudignore`).** The server syncs everything except dot-named files and rejects a whole put if any file has an unsupported extension (verified 2026-10-16). So a checkout that also holds `.git/`, `.vscode/` or editor scratch files either leaks them into the cloud or can't be pushed at all. A gitignore-style file read by every client would fix both.
