@@ -140,6 +140,12 @@ export class BacloudClient {
   private readonly server: string;
   private session: BacloudSession;
   private bearer: string | undefined;
+  /**
+   * The current run's cwd. The server addresses files by paths built
+   * from the cwd we report, which may be relative to it; the host must
+   * see them resolved against that, never the process's own cwd.
+   */
+  private cwd = ".";
 
   private constructor(options: ClientOptions, server: string, session: BacloudSession) {
     this.options = options;
@@ -172,6 +178,7 @@ export class BacloudClient {
 
   /** Run one user command (argv, without the `bacloud` itself). */
   async run(argv: string[], options: RunOptions): Promise<RunResult> {
+    this.cwd = options.cwd;
     const guard = await this.prepareWorkspaceGuard(argv, options.cwd);
     const args = guard?.args ?? argv;
     const idempotent = isIdempotentCommand(args);
@@ -192,7 +199,7 @@ export class BacloudClient {
       if (response.login !== undefined) this.setLogin(response.login);
       if (response.logout) this.setLogin(undefined);
       if (response.dirManifest !== undefined) {
-        const manifest = await this.options.host.fs.manifest(response.dirManifest);
+        const manifest = await this.options.host.fs.manifest(this.local(response.dirManifest));
         extraArgs["manifest"] = encodeDirectoryManifest(manifest);
       }
       if (response.uploadsSigned) {
@@ -314,6 +321,11 @@ export class BacloudClient {
 
   // ---------------------------------------------------------------- //
 
+  /** A server-sent path as the host should see it. */
+  private local(path: string): string {
+    return resolvePath(this.cwd, path);
+  }
+
   private setLogin(token: string | undefined): void {
     this.bearer = token;
     this.options.onLoginChange?.(token);
@@ -366,17 +378,19 @@ export class BacloudClient {
   private async applyFileOps(response: StandardResponse): Promise<void> {
     const fs = this.options.host.fs;
     // Deletes first so downloads only ever have to replace empty dirs.
-    for (const path of response.deletes ?? []) await fs.deleteFile(path);
+    for (const path of response.deletes ?? []) await fs.deleteFile(this.local(path));
     if (response.casDelivery) {
       throw new BacloudError("CAS asset delivery is not supported by this client yet.");
     }
     for (const [path, zipped] of Object.entries(response.downloadsInline ?? {})) {
-      await fs.writeFile(path, await inflate(zipped));
+      await fs.writeFile(this.local(path), await inflate(zipped));
     }
     if (response.downloadsSigned?.length) {
       await this.downloadSigned(response.downloadsSigned, response.downloadsSignedProgress);
     }
-    if (response.dirPruneEmpty !== undefined) await fs.pruneEmptyDirs(response.dirPruneEmpty);
+    if (response.dirPruneEmpty !== undefined) {
+      await fs.pruneEmptyDirs(this.local(response.dirPruneEmpty));
+    }
   }
 
   private async uploadSigned(entries: SignedUploadEntry[]): Promise<Record<string, string>> {
@@ -391,7 +405,7 @@ export class BacloudClient {
   private async uploadOneshot(entries: OneshotUploadEntry[]): Promise<Record<string, string>> {
     const results: Record<string, string> = {};
     for (const entry of entries) {
-      const body = await this.options.host.fs.readFile(entry.path);
+      const body = await this.options.host.fs.readFile(this.local(entry.path));
       const headers: Record<string, string> = {
         "User-Agent": bacloudUserAgent(this.options.client),
         "Content-Type": "application/octet-stream",
@@ -416,7 +430,7 @@ export class BacloudClient {
   }
 
   private async put(url: string, headers: Record<string, string>, path: string, label: string) {
-    const body = await this.options.host.fs.readFile(path);
+    const body = await this.options.host.fs.readFile(this.local(path));
     const res = await fetch(url, { method: "PUT", headers, body });
     if (!res.ok) {
       throw new BacloudError(
@@ -427,7 +441,7 @@ export class BacloudClient {
 
   /** Manifest → dedup → upload → finalize, then call the plan's command. */
   private async runUploadPlan(plan: UploadPlan, idempotent: boolean): Promise<Call> {
-    const manifest = await this.options.host.fs.manifest(plan.sourceDir);
+    const manifest = await this.options.host.fs.manifest(this.local(plan.sourceDir));
     const files: UploadPlanFileInfo[] = Object.entries(manifest.files).map(([name, info]) => ({
       name,
       ...info,
@@ -503,7 +517,7 @@ export class BacloudClient {
           `Download of ${entry.path} sha256 mismatch: got ${digest}, expected ${entry.sha256}.`,
         );
       }
-      await this.options.host.fs.writeFile(entry.path, data);
+      await this.options.host.fs.writeFile(this.local(entry.path), data);
       doneCount++;
       if (Date.now() - lastReport >= 2000 && doneCount < totalCount) {
         lastReport = Date.now();

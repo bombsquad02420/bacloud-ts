@@ -256,3 +256,30 @@ test("put refuses when the state file is corrupt (fail closed)", async () => {
   );
   await client.close();
 });
+
+test("relative paths from the server resolve against the run's cwd, not the process's", async () => {
+  const root = await mkdtemp(join(tmpdir(), "bacloud-rel-"));
+  await mkdir(join(root, "WS"));
+  await writeFile(join(root, "WS", "old.txt"), "old");
+  await mkdir(join(root, "WS", "empty"));
+  const { host } = testHost();
+  const { client, leg } = await connect(host);
+  const serving = serve(leg, [
+    () => ({ man: "WS", ec: ["workspace._get_process", {}] }),
+    () => ({
+      dlt: ["WS/old.txt"],
+      dinl: { "WS/new.txt": deflateSync("new").toString("base64") },
+      dpe: "WS",
+    }),
+  ]);
+  expect(process.cwd()).not.toBe(root);
+  await client.run(["workspace", "get", "WS"], { cwd: root });
+  const requests = await serving;
+
+  const manifest = (requests[1]!["p"] as { manifest: { f: Record<string, unknown>; e: boolean } })
+    .manifest;
+  expect(manifest).toMatchObject({ e: true, f: { "old.txt": expect.anything() } });
+  // old.txt deleted, new.txt written, empty/ pruned: all under root/WS.
+  expect((await readdir(join(root, "WS"))).sort()).toEqual(["new.txt"]);
+  await client.close();
+});
