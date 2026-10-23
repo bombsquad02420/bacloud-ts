@@ -101,6 +101,13 @@ A client can't ask "what snapshot is the cloud workspace at now?" without downlo
 - **Effect:** a client can't show "your checkout is out of date" or warn before a push that will be refused. `pcommand assetworkspace` works around it with the API-key endpoint, and the `bacloud-ts` VS Code extension fetches the whole workspace into a staging copy just to find out.
 - **Ask:** a read-only call that accepts login tokens, e.g. `workspace status <name>` returning `{snapshotid, modified}`. Or include the snapshot id in `workspace list` output (ideally in a machine-readable form, which `workspace list` also lacks).
 
+### No way to get a workspace's web id
+
+The website addresses workspaces by an id, e.g. `https://www.ballistica.net/workspace/aYohMSLvk036OntLh8Uh?focus=characters%2Fbones.bchar`; a name in its place (`/workspace/Workspace1`) does not work (checked 2026-10-23). bacloud never exposes that id: no `workspace` command prints it, the `get`/`put` conversation only uses the name (`workspace_name`), and signed download URLs are keyed by file content. (The snapshot id is a different value.)
+
+- **Effect:** clients can't offer "Open in Browser" or "Copy Remote File URL", the way VS Code does for git remotes. The `bacloud-ts` VS Code extension has parked both features.
+- **Ask:** return the workspace id from `get`/`put` (this is the `workspaceid` field above) and in `workspace list`. Alternatively, accept names in web URLs (`/workspace/<name>`).
+
 ### Browsers can't use the bacloud API
 
 Since protocol 26, bacloud only works over a WebSocket session (`wss://<node>/bacloudsession`); the HTTP request-per-call fallback was removed. That session requires headers browsers can't set on a WebSocket:
