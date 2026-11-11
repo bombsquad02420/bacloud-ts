@@ -1,7 +1,7 @@
 {
   "name": "bacloud-vscode",
   "displayName": "Ballistica Cloud",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "Clone and pull Ballistica cloud workspaces.",
   "categories": [

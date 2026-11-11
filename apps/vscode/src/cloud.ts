@@ -14,7 +14,7 @@ import {
   type Fleet,
   type RunResult,
 } from "@bacloud/sdk";
-import { nodeFileHost } from "@bacloud/sdk/node";
+import { nodeFileHost, nodeZstd } from "@bacloud/sdk/node";
 
 export function currentFleet(): Fleet {
   return vscode.workspace.getConfiguration("bacloud").get<Fleet>("fleet", "prod");
@@ -66,6 +66,7 @@ export class Cloud {
         void vscode.env.openExternal(vscode.Uri.parse(url));
       },
       fs: nodeFileHost,
+      zstd: nodeZstd,
     };
 
     const trace = vscode.workspace.getConfiguration("bacloud").get<boolean>("trace", false);

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.1
+
+### Fixed
+
+- **"4002 bacloud client too old".** Updated to the cloud's current protocol (31), which compresses file transfers.
+
 ## 0.1.0
 
 ### New
