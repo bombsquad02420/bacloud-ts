@@ -39,9 +39,9 @@ describe("BacloudSession", () => {
     expect(leg.url).toBe("wss://node.test/bacloudsession");
     expect(leg.options.protocols).toEqual(["basmartsocket"]);
     expect(leg.options.headers["Authorization"]).toBe("Bearer bsac-key");
-    expect(leg.options.headers["X-Bacloud-Version"]).toBe("29");
+    expect(leg.options.headers["X-Bacloud-Version"]).toBe("31");
     expect(leg.options.headers["X-WS-Token"]).toBeUndefined();
-    expect(leg.options.headers["User-Agent"]).toBe("bacloud/29");
+    expect(leg.options.headers["User-Agent"]).toBe("bacloud/31");
     leg.push({ type: "h" });
     await session.end();
   });
@@ -69,7 +69,7 @@ describe("BacloudSession", () => {
       dialer: relay.dialer,
     });
     const leg = await relay.leg(0);
-    expect(leg.options.headers["User-Agent"]).toBe("bacloud-ts-cli/1.2.3 bacloud/29");
+    expect(leg.options.headers["User-Agent"]).toBe("bacloud-ts-cli/1.2.3 bacloud/31");
     await leg.nextFrame("h");
     leg.push({ type: "h" });
     const session = await opening;

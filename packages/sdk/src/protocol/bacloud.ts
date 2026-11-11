@@ -11,7 +11,7 @@ import { decode, encode, multitype, type Schema } from "./codec.ts";
  * Protocol version sent with every session. The server rejects
  * clients below its minimum, which tracks this value.
  */
-export const BACLOUD_VERSION = 29;
+export const BACLOUD_VERSION = 31;
 
 /**
  * User-Agent for bacloud requests. Upstream sends `bacloud/<version>`;
@@ -67,7 +67,16 @@ export interface SignedUploadEntry {
   uploadUrl: string;
   uploadHeaders: Record<string, string>;
   sessionId: string;
+  /** v31: encode the file this way before the PUT (default uncompressed). */
+  uploadEncoding?: CompressionType;
+  /** v31: zstd level for {@link uploadEncoding}. */
+  uploadLevel?: number;
 }
+
+/** `bacommon.cloudfilecodec.CompressionType` wire values. */
+export type CompressionType = "u" | "z" | (string & {});
+export const UNCOMPRESSED = "u";
+export const ZSTD = "z";
 
 export interface OneshotUploadEntry {
   path: string;
@@ -79,6 +88,8 @@ export interface SignedDownloadEntry {
   downloadUrl: string;
   sha256: string;
   size: number;
+  /** v30: how the bytes at the URL are encoded; sha256/size describe the decoded bytes. */
+  compression?: CompressionType;
 }
 
 export interface SignedDownloadsProgress {
@@ -94,6 +105,8 @@ export interface UploadPlan {
   finalizeState: Record<string, unknown>;
   cloudFileCategory: string;
   description?: string;
+  /** v30: opaque storage form, echoed in the prepare request. */
+  formCode?: string;
 }
 
 export interface CasDelivery {
@@ -158,7 +171,18 @@ const standardResponseSchema: Schema = {
   dirManifest: "man",
   uploadsSigned: {
     key: "usgn",
-    kind: { list: { object: { path: "p", uploadUrl: "u", uploadHeaders: "h", sessionId: "s" } } },
+    kind: {
+      list: {
+        object: {
+          path: "p",
+          uploadUrl: "u",
+          uploadHeaders: "h",
+          sessionId: "s",
+          uploadEncoding: "e",
+          uploadLevel: "l",
+        },
+      },
+    },
   },
   uploadsOneshot: { key: "uos", kind: { list: { object: { path: "p", cloudFileId: "f" } } } },
   uploadPlan: {
@@ -170,6 +194,7 @@ const standardResponseSchema: Schema = {
         finalizeState: "fs",
         cloudFileCategory: "ct",
         description: "de",
+        formCode: "fm",
       },
     },
   },
@@ -178,7 +203,9 @@ const standardResponseSchema: Schema = {
   downloadsInline: { key: "dinl", kind: { record: "bytes" } },
   downloadsSigned: {
     key: "dsgn",
-    kind: { list: { object: { path: "p", downloadUrl: "u", sha256: "h", size: "s" } } },
+    kind: {
+      list: { object: { path: "p", downloadUrl: "u", sha256: "h", size: "s", compression: "c" } },
+    },
   },
   downloadsSignedProgress: {
     key: "dsgp",
@@ -268,6 +295,8 @@ export interface UploadPlanPrepareItem {
   uploadUrl?: string;
   uploadHeaders?: Record<string, string>;
   sessionId?: string;
+  uploadEncoding?: CompressionType;
+  uploadLevel?: number;
 }
 
 const prepareItemSchema: Schema = {
@@ -276,18 +305,23 @@ const prepareItemSchema: Schema = {
   uploadUrl: "u",
   uploadHeaders: "h",
   sessionId: "s",
+  uploadEncoding: "e",
+  uploadLevel: "l",
 };
 
 export function encodePrepareRequest(
   files: UploadPlanFileInfo[],
   cloudFileCategory: string,
+  formCode = "",
 ): Record<string, unknown> {
   return encode(
     {
       files: { key: "f", kind: { list: { object: { name: "n", sha256: "h", size: "s" } } } },
       cat: "ct",
+      formCode: "fm",
     },
-    { files, cat: cloudFileCategory },
+    // form_code is store_default=False upstream: omit when empty.
+    { files, cat: cloudFileCategory, ...(formCode ? { formCode } : {}) },
   );
 }
 

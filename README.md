@@ -17,7 +17,7 @@ vp run -r test
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, live testing and the VS Code extension.
 
-The SDK and CLI are ported from [ballistica](https://github.com/efroemling/ballistica) `5cd0916442fd` (v1.8.1, bacloud protocol 29). [UPSTREAM.md](UPSTREAM.md) maps each file to its upstream counterpart and lists every behaviour difference.
+The SDK and CLI are ported from [ballistica](https://github.com/efroemling/ballistica) `d6049a667286` (v1.8.7+, bacloud protocol 31). [UPSTREAM.md](UPSTREAM.md) maps each file to its upstream counterpart and lists every behaviour difference.
 
 ## License
 

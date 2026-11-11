@@ -38,6 +38,15 @@ export interface IoHost {
   openUrl(url: string): void;
 }
 
+/** zstd, for protocol v30+ compressed transfers. */
+export interface ZstdCodec {
+  compress(data: Uint8Array, level: number): Promise<Uint8Array>;
+  /** Must reject on truncated or corrupt input. */
+  decompress(data: Uint8Array): Promise<Uint8Array>;
+}
+
 export interface BacloudHost extends IoHost {
   fs: FileHost;
+  /** Needed only when the server sends or asks for zstd. */
+  zstd?: ZstdCodec;
 }

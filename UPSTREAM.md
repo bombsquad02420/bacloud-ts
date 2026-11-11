@@ -3,15 +3,15 @@
 The SDK and CLI are a TypeScript port of the bacloud client from
 [ballistica](https://github.com/efroemling/ballistica).
 
-|                    |                                                                       |
-| ------------------ | --------------------------------------------------------------------- |
-| Ported from commit | `5cd0916442fd4307dae1d73da2fd0e932b4b2df6` (tag `v1.8.1`, 2026-10-14) |
-| bacloud protocol   | `BACLOUD_VERSION = 29`                                                |
+|                    |                                                                     |
+| ------------------ | ------------------------------------------------------------------- |
+| Ported from commit | `d6049a667286ff906406ccc7d635f3d315256df3` (`v1.8.7-6`, 2026-11-04) |
+| bacloud protocol   | `BACLOUD_VERSION = 31`                                              |
 
 To see what changed upstream since this port:
 
 ```bash
-git -C ../ballistica log --oneline 5cd0916442fd..origin/main -- \
+git -C ../ballistica log --oneline d6049a667286..origin/main -- \
   tools/bacommon/bacloud.py tools/bacommon/transfer.py \
   tools/bacommontools/bacloud.py tools/bacommontools/bacloudsession.py \
   tools/efro/smartsocket.py tools/efro/dataclassio
@@ -62,15 +62,15 @@ Deliberate changes and known gaps compared with upstream.
 
 ### Not ported (yet)
 
-| Upstream feature                                                                                                | Effect here                                                             |
-| --------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| CAS asset delivery (`cas_delivery`, `bacommon/assetcas`, `securedata` tokens)                                   | `assetpackage _assemble` responses using it fail with a clear error     |
-| SmartSocket token refresh (`REFRESH` action)                                                                    | A `4001` close ends the session                                         |
-| SmartSocket in-flight byte cap and back-pressure (`SmartSocketPayloadTooLarge`, `SmartSocketSendWouldDeadlock`) | Fine for bacloud's small sequential requests                            |
-| SmartSocket relay-buffer-full cursor handling, serve-failure counter, anomaly detection                         | Reconnects still follow the close-code actions                          |
-| Anomaly reports to the master's `/api/v1/clientlog`                                                             | Nothing is reported home                                                |
-| Streaming signed downloads and uploads                                                                          | Bodies are buffered in memory (fine for workspace-sized files)          |
-| `BA_BACLOUD_DOWNLOAD_WORKERS`                                                                                   | Use `downloadWorkers` on `ClientOptions` (default 16, same as upstream) |
+| Upstream feature                                                                                                | Effect here                                                                                                                                                              |
+| --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| CAS asset delivery (`cas_delivery`, `bacommon/assetcas`, `securedata` tokens)                                   | `assetpackage _assemble` responses using it fail with a clear error                                                                                                      |
+| SmartSocket token refresh (`REFRESH` action)                                                                    | A `4001` close ends the session                                                                                                                                          |
+| SmartSocket in-flight byte cap and back-pressure (`SmartSocketPayloadTooLarge`, `SmartSocketSendWouldDeadlock`) | Fine for bacloud's small sequential requests                                                                                                                             |
+| SmartSocket relay-buffer-full cursor handling, serve-failure counter, anomaly detection                         | Reconnects still follow the close-code actions                                                                                                                           |
+| Anomaly reports to the master's `/api/v1/clientlog`                                                             | Nothing is reported home                                                                                                                                                 |
+| Streaming signed downloads and uploads (incl. streaming zstd, v30/v31)                                          | Bodies, and their zstd encode/decode, are buffered in memory (fine for workspace-sized files); zstd comes from the host (`BacloudHost.zstd`, `node:zlib` on Node 22.15+) |
+| `BA_BACLOUD_DOWNLOAD_WORKERS`                                                                                   | Use `downloadWorkers` on `ClientOptions` (default 16, same as upstream)                                                                                                  |
 
 ### Observed server behaviour (not in upstream source)
 

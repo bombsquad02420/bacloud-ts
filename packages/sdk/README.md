@@ -1,6 +1,6 @@
 # @bacloud/sdk
 
-TypeScript client for Ballistica's cloud (`bacloud`, protocol v29).
+TypeScript client for Ballistica's cloud (`bacloud`, protocol v31).
 
 ```ts
 import { BacloudClient } from "@bacloud/sdk";

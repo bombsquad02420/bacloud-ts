@@ -24,6 +24,9 @@ import {
   encodeUploadPlanCommit,
   type OneshotUploadEntry,
   type SignedDownloadEntry,
+  type CompressionType,
+  UNCOMPRESSED,
+  ZSTD,
   type SignedDownloadsProgress,
   type SignedUploadEntry,
   type StandardResponse,
@@ -396,7 +399,7 @@ export class BacloudClient {
   private async uploadSigned(entries: SignedUploadEntry[]): Promise<Record<string, string>> {
     const sessions: Record<string, string> = {};
     for (const entry of entries) {
-      await this.put(entry.uploadUrl, entry.uploadHeaders, entry.path, entry.path);
+      await this.put(entry.uploadUrl, entry.uploadHeaders, entry.path, entry.path, entry);
       sessions[entry.path] = entry.sessionId;
     }
     return sessions;
@@ -429,13 +432,57 @@ export class BacloudClient {
     return results;
   }
 
-  private async put(url: string, headers: Record<string, string>, path: string, label: string) {
-    const body = await this.options.host.fs.readFile(this.local(path));
+  private async put(
+    url: string,
+    headers: Record<string, string>,
+    path: string,
+    label: string,
+    encoding: { uploadEncoding?: CompressionType; uploadLevel?: number },
+  ) {
+    const raw = await this.options.host.fs.readFile(this.local(path));
+    // v31: the server picks each file's stored encoding; we PUT it encoded.
+    const body = await this.encode(raw, encoding.uploadEncoding, encoding.uploadLevel ?? 0, label);
     const res = await fetch(url, { method: "PUT", headers, body });
     if (!res.ok) {
       throw new BacloudError(
         `Upload of ${label} failed: status=${res.status} body=${await res.text()}`,
       );
+    }
+  }
+
+  private zstd(label: string) {
+    const codec = this.options.host.zstd;
+    if (!codec) throw new BacloudError(`${label} needs zstd, which this host doesn't provide.`);
+    return codec;
+  }
+
+  private async encode(
+    data: Uint8Array,
+    encoding: CompressionType | undefined,
+    level: number,
+    label: string,
+  ): Promise<Uint8Array> {
+    if (!encoding || encoding === UNCOMPRESSED) return data;
+    if (encoding !== ZSTD) throw new BacloudError(`Cannot encode ${label} as '${encoding}'.`);
+    return this.zstd(`Uploading ${label}`).compress(data, level);
+  }
+
+  private async decode(
+    data: Uint8Array,
+    encoding: CompressionType | undefined,
+    label: string,
+  ): Promise<Uint8Array> {
+    if (!encoding || encoding === UNCOMPRESSED) return data;
+    if (encoding !== ZSTD) {
+      throw new BacloudError(
+        `Download of ${label} uses unsupported encoding '${encoding}'; update bacloud-ts.`,
+      );
+    }
+    try {
+      return await this.zstd(`Downloading ${label}`).decompress(data);
+    } catch (err) {
+      if (err instanceof BacloudError) throw err;
+      throw new BacloudError(`Download of ${label} has a broken compressed stream: ${String(err)}`);
     }
   }
 
@@ -454,7 +501,7 @@ export class BacloudClient {
     const prepared = await this.call(
       [
         uploadPlanSibling(plan.finalizeCommand, "_upload_plan_prepare"),
-        encodePrepareRequest(files, plan.cloudFileCategory),
+        encodePrepareRequest(files, plan.cloudFileCategory, plan.formCode),
       ],
       idempotent,
     );
@@ -475,6 +522,7 @@ export class BacloudClient {
         item.uploadHeaders ?? {},
         joinPath(plan.sourceDir, item.name),
         item.name,
+        item,
       );
       sessions[item.name] = item.sessionId;
     }
@@ -505,7 +553,9 @@ export class BacloudClient {
       if (!res.ok) {
         throw new BacloudError(`Download of ${entry.path} failed: status=${res.status}`);
       }
-      const data = new Uint8Array(await res.arrayBuffer());
+      const fetched = new Uint8Array(await res.arrayBuffer());
+      // v30: sha256/size describe the decoded bytes.
+      const data = await this.decode(fetched, entry.compression, entry.path);
       if (data.length !== entry.size) {
         throw new BacloudError(
           `Download of ${entry.path} returned ${data.length} bytes; expected ${entry.size}.`,

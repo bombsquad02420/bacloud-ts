@@ -12,7 +12,9 @@ import { createReadStream } from "node:fs";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { createInterface } from "node:readline/promises";
-import type { BacloudHost, FileHost, IoHost } from "./host.ts";
+import * as zlib from "node:zlib";
+import { promisify } from "node:util";
+import type { BacloudHost, FileHost, IoHost, ZstdCodec } from "./host.ts";
 import type { DirectoryManifest } from "./protocol/bacloud.ts";
 
 async function hashFile(file: string): Promise<{ sha256: string; size: number }> {
@@ -134,4 +136,16 @@ export const nodeIoHost: IoHost = {
   },
 };
 
-export const nodeHost: BacloudHost = { ...nodeIoHost, fs: nodeFileHost };
+/** zstd via `node:zlib` (Node 22.15+); undefined on older runtimes. */
+export const nodeZstd: ZstdCodec | undefined =
+  typeof zlib.zstdCompress === "function"
+    ? {
+        compress: async (data, level) =>
+          promisify(zlib.zstdCompress)(data, {
+            params: { [zlib.constants.ZSTD_c_compressionLevel]: level },
+          }),
+        decompress: async (data) => promisify(zlib.zstdDecompress)(data),
+      }
+    : undefined;
+
+export const nodeHost: BacloudHost = { ...nodeIoHost, fs: nodeFileHost, zstd: nodeZstd };

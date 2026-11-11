@@ -1,4 +1,4 @@
-import { deflateSync } from "node:zlib";
+import { deflateSync, zstdCompressSync, zstdDecompressSync } from "node:zlib";
 import { createHash } from "node:crypto";
 import { mkdtemp, readFile, writeFile, mkdir, readdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 import { BacloudClient, isIdempotentCommand, uploadPlanSibling } from "../src/client.ts";
 import type { BacloudHost } from "../src/host.ts";
-import { nodeFileHost } from "../src/node.ts";
+import { nodeFileHost, nodeZstd } from "../src/node.ts";
 import { fakeRelay, msg, type FakeLeg } from "./fakerelay.ts";
 
 function testHost(answers: string[] = []) {
@@ -19,6 +19,7 @@ function testHost(answers: string[] = []) {
     prompt: () => Promise.resolve(answers.shift() ?? ""),
     openUrl: (u) => urls.push(u),
     fs: nodeFileHost,
+    zstd: nodeZstd,
   };
   return { host, out, err, urls };
 }
@@ -164,6 +165,84 @@ describe("BacloudClient.run", () => {
     ]);
     await expect(client.run(["workspace", "get"], { cwd: dir })).rejects.toThrow(/sha256 mismatch/);
     await serving;
+    await client.close();
+  });
+});
+
+describe("v30/v31 compression", () => {
+  test("zstd signed download is decoded and checked against decoded bytes", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "bacloud-"));
+    const plain = new TextEncoder().encode("compressed content ".repeat(50));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(zstdCompressSync(plain))),
+    );
+    const { host } = testHost();
+    const { client, leg } = await connect(host);
+    const serving = serve(leg, [
+      () => ({
+        dsgn: [
+          {
+            p: join(dir, "f.txt"),
+            u: "https://x",
+            h: createHash("sha256").update(plain).digest("hex"),
+            s: plain.length,
+            c: "z",
+          },
+        ],
+      }),
+    ]);
+    await client.run(["workspace", "get"], { cwd: dir });
+    await serving;
+    expect(await readFile(join(dir, "f.txt"))).toEqual(Buffer.from(plain));
+    await client.close();
+  });
+
+  test("truncated zstd download is rejected", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "bacloud-"));
+    const packed = zstdCompressSync(Buffer.alloc(10000, 1));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(packed.subarray(0, packed.length - 4))),
+    );
+    const { host } = testHost();
+    const { client, leg } = await connect(host);
+    const serving = serve(leg, [
+      () => ({
+        dsgn: [{ p: join(dir, "f"), u: "https://x", h: "0".repeat(64), s: 10000, c: "z" }],
+      }),
+    ]);
+    await expect(client.run(["workspace", "get"], { cwd: dir })).rejects.toThrow(
+      /compressed stream/,
+    );
+    await serving;
+    await client.close();
+  });
+
+  test("signed upload is zstd-encoded when the server asks", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "bacloud-"));
+    await writeFile(join(dir, "a.py"), "print('hi')\n".repeat(20));
+    let sent: Uint8Array | undefined;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init: RequestInit) => {
+        sent = init.body as Uint8Array;
+        return new Response("");
+      }),
+    );
+    const { host } = testHost();
+    const { client, leg } = await connect(host);
+    const serving = serve(leg, [
+      () => ({
+        usgn: [{ p: join(dir, "a.py"), u: "https://up", h: {}, s: "sess", e: "z", l: 3 }],
+        ec: ["workspace._put", {}],
+      }),
+      () => ({ r: 0 }),
+    ]);
+    await client.run(["workspace", "put"], { cwd: dir });
+    const requests = await serving;
+    expect(zstdDecompressSync(sent!).toString()).toBe("print('hi')\n".repeat(20));
+    expect(requests[1]!["p"]).toMatchObject({ uploads_signed: { [join(dir, "a.py")]: "sess" } });
     await client.close();
   });
 });
